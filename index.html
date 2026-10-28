@@ -1,0 +1,530 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#2f6b4f">
+<title>Sales Book</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+  :root {
+    --bg: #f4f1ea;
+    --card: #ffffff;
+    --ink: #1f2a24;
+    --muted: #66706a;
+    --line: #e2ddd2;
+    --brand: #2f6b4f;
+    --brand-ink: #ffffff;
+    --accent: #b5532d;
+    --ok: #2f6b4f;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151a17; --card: #1f2621; --ink: #e9ece9; --muted: #9aa49e;
+      --line: #313a34; --brand: #4f9c76; --brand-ink: #0d1410; --accent: #e08a62;
+      --ok: #6cc196;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 17px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { padding-bottom: 96px; }
+  header { position: sticky; top: 0; z-index: 5; background: var(--brand); color: var(--brand-ink);
+    padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 20px; margin: 0; flex: 1; font-weight: 650; }
+  header small { display: block; font-size: 13px; opacity: .85; font-weight: 400; }
+  .icon-btn { background: transparent; border: 0; color: inherit; font-size: 26px; width: 44px; height: 44px;
+    border-radius: 10px; cursor: pointer; }
+  main { max-width: 640px; margin: 0 auto; padding: 12px 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 14px; margin-bottom: 12px; }
+  .daterow { display: flex; align-items: center; gap: 8px; }
+  .daterow input { flex: 1; text-align: center; font-weight: 600; }
+  .daterow .day { text-align: center; color: var(--muted); font-size: 14px; margin-top: 6px; }
+  label { display: block; font-size: 14px; color: var(--muted); margin: 10px 0 4px; }
+  input, select { width: 100%; font: inherit; color: var(--ink); background: var(--card);
+    border: 1.5px solid var(--line); border-radius: 10px; padding: 11px 12px; min-height: 48px; }
+  input:focus, select:focus { outline: none; border-color: var(--brand); }
+  #amount { font-size: 26px; font-weight: 700; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+    min-height: 52px; border: 0; border-radius: 12px; font: inherit; font-weight: 650; cursor: pointer;
+    background: var(--brand); color: var(--brand-ink); margin-top: 14px; }
+  .btn.secondary { background: transparent; color: var(--brand); border: 1.5px solid var(--brand); }
+  .btn.danger { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
+  .btn.small { min-height: 40px; width: auto; padding: 0 14px; margin: 0; font-size: 15px; }
+  .btn:disabled { opacity: .45; }
+  .row { display: flex; gap: 10px; }
+  .row > * { flex: 1; }
+  .summary { display: flex; justify-content: space-between; align-items: baseline; }
+  .summary b { font-size: 22px; }
+  .vendor { padding: 0; overflow: hidden; }
+  .vendor h3 { margin: 0; padding: 12px 14px; font-size: 17px; display: flex; justify-content: space-between;
+    border-bottom: 1px solid var(--line); }
+  .vendor h3 span { color: var(--muted); font-weight: 500; font-size: 14px; }
+  .line { display: flex; justify-content: space-between; gap: 10px; padding: 10px 14px;
+    border-bottom: 1px solid var(--line); cursor: pointer; }
+  .line:active { background: var(--bg); }
+  .line .what { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .line .amt { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+  .sent { color: var(--ok); font-size: 13px; margin-left: 6px; }
+  .totals { padding: 10px 14px; font-variant-numeric: tabular-nums; }
+  .totals div { display: flex; justify-content: space-between; }
+  .totals .due { font-weight: 700; }
+  .empty { text-align: center; color: var(--muted); padding: 24px 8px; }
+  footer { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(6px);
+    border-top: 1px solid var(--line); }
+  footer .btn { margin: 0; max-width: 608px; margin-inline: auto; display: flex; }
+  dialog { border: 0; border-radius: 18px; padding: 18px; width: min(92vw, 460px); background: var(--card);
+    color: var(--ink); }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  dialog h2 { margin: 0 0 6px; font-size: 19px; }
+  dialog p { margin: 6px 0; color: var(--muted); font-size: 15px; }
+  .menu .btn { margin-top: 10px; }
+  .toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); background: var(--ink);
+    color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 15px; opacity: 0;
+    transition: opacity .2s; pointer-events: none; max-width: 90vw; text-align: center; z-index: 20; }
+  .toast.show { opacity: 1; }
+  .hint { font-size: 14px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Sales Book<small id="bizName"></small></h1>
+  <button class="icon-btn" id="menuBtn" aria-label="Menu">&#9776;</button>
+</header>
+
+<main>
+  <section class="card">
+    <div class="daterow">
+      <button class="btn secondary small" id="prevDay" aria-label="Previous day">&#8249;</button>
+      <input type="date" id="saleDate" aria-label="Date">
+      <button class="btn secondary small" id="nextDay" aria-label="Next day">&#8250;</button>
+    </div>
+    <div class="day" id="dayName"></div>
+  </section>
+
+  <section class="card" id="entry">
+    <label for="vendor">Vendor</label>
+    <select id="vendor"></select>
+    <div class="row">
+      <div>
+        <label for="amount">Amount (R)</label>
+        <input id="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00">
+      </div>
+    </div>
+    <label for="item">Item (optional)</label>
+    <input id="item" type="text" autocomplete="off" placeholder="e.g. Bunny">
+    <button class="btn" id="addBtn">Add Sale</button>
+  </section>
+
+  <section class="card summary" id="daySummary"></section>
+  <div id="dayList"></div>
+</main>
+
+<footer>
+  <button class="btn" id="sendBtn">Send to BankBooks</button>
+</footer>
+
+<!-- Edit a sale -->
+<dialog id="editDlg">
+  <h2>Change Sale</h2>
+  <p id="editSentNote" hidden>This sale was already sent to BankBooks. Changes here won't reach
+    BankBooks: ask for it to be changed there.</p>
+  <label for="editVendor">Vendor</label>
+  <select id="editVendor"></select>
+  <label for="editAmount">Amount (R)</label>
+  <input id="editAmount" type="text" inputmode="decimal">
+  <label for="editItem">Item</label>
+  <input id="editItem" type="text">
+  <div class="row">
+    <button class="btn danger" id="editDelete">Delete</button>
+    <button class="btn" id="editSave">Save</button>
+  </div>
+  <button class="btn secondary" id="editCancel">Cancel</button>
+</dialog>
+
+<!-- Menu -->
+<dialog id="menuDlg" class="menu">
+  <h2>Menu</h2>
+  <button class="btn secondary" id="mLoadVendors">Load Vendor List</button>
+  <button class="btn secondary" id="mAddVendor">Add a Vendor</button>
+  <button class="btn secondary" id="mResend">Send All Sales Again</button>
+  <button class="btn secondary" id="mBusiness">Business Name</button>
+  <p class="hint" id="mInfo"></p>
+  <button class="btn" id="mClose">Close</button>
+  <input type="file" id="vendorFile" accept=".csv,text/csv,text/plain,text/comma-separated-values" hidden>
+</dialog>
+
+<!-- Add vendor -->
+<dialog id="vendDlg">
+  <h2>Add a Vendor</h2>
+  <p>Use the same name as in BankBooks. New names are added in BankBooks when the sales are imported.</p>
+  <label for="newVendName">Vendor name</label>
+  <input id="newVendName" type="text" autocomplete="off">
+  <label for="newVendPct">Commission %</label>
+  <input id="newVendPct" type="text" inputmode="decimal" value="10">
+  <div class="row">
+    <button class="btn secondary" id="vendCancel">Cancel</button>
+    <button class="btn" id="vendSave">Add</button>
+  </div>
+</dialog>
+
+<!-- After a download where sharing isn't available -->
+<dialog id="sentDlg">
+  <h2>Did it send?</h2>
+  <p id="sentText"></p>
+  <div class="row">
+    <button class="btn secondary" id="sentNo">No</button>
+    <button class="btn" id="sentYes">Yes, mark as sent</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+/* Sales Book: write up sales per vendor per day, then send them to BankBooks
+   as a CSV file (uid,date,vendor_id,vendor,item,amount). Each sale has a
+   unique id, so BankBooks never imports the same sale twice. Everything is
+   kept on this phone (localStorage) until it is sent. */
+
+const KEY = 'salesbook.v1';
+const $ = id => document.getElementById(id);
+
+let db = load();
+let editing = null;      // uid of the sale in the edit dialog
+let pendingSend = null;  // uids waiting for "did it send?"
+
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(KEY));
+    if (d && Array.isArray(d.sales)) return Object.assign({ vendors: [], settings: {} }, d);
+  } catch (e) { /* start empty */ }
+  return {
+    vendors: [{ id: 0, name: 'Own Stock', own: 1, pct: 100 }],
+    sales: [],
+    settings: { business: 'HUM' }
+  };
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(db)); }
+  catch (e) { alert('Could not save on this phone: ' + e.message); }
+}
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+
+/* ---------- helpers ---------- */
+const money = n => 'R' + n.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const round2 = n => Math.round(n * 100) / 100;
+function todayISO() {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+function shiftDate(iso, days) {
+  const d = new Date(iso + 'T12:00:00');
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+function parseAmount(s) {
+  // accepts 390, 390.50, 390,50, R 1 390.50
+  s = String(s).replace(/[Rr\s]/g, '');
+  if (/,\d{1,2}$/.test(s) && !s.includes('.')) s = s.replace(',', '.');
+  s = s.replace(/,/g, '');
+  const n = Number(s);
+  return isFinite(n) && s !== '' ? round2(n) : NaN;
+}
+function newUid() {
+  const r = crypto.getRandomValues ? Array.from(crypto.getRandomValues(new Uint8Array(6)),
+    b => b.toString(16).padStart(2, '0')).join('') : Math.random().toString(16).slice(2, 14);
+  return Date.now().toString(36) + '-' + r;
+}
+function vendorBy(vid, name) {
+  return db.vendors.find(v => (vid && v.id === vid) || v.name === name);
+}
+function toast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast.t);
+  toast.t = setTimeout(() => t.classList.remove('show'), 2600);
+}
+function csvCell(s) {
+  s = String(s ?? '');
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+function parseCSV(text) {
+  const rows = [];
+  for (const raw of text.replace(/^﻿/, '').split(/\r?\n/)) {
+    if (!raw.trim()) continue;
+    const out = []; let cur = ''; let q = false;
+    for (let i = 0; i < raw.length; i++) {
+      const c = raw[i];
+      if (q) {
+        if (c === '"') { if (raw[i + 1] === '"') { cur += '"'; i++; } else q = false; }
+        else cur += c;
+      } else if (c === '"') q = true;
+      else if (c === ',') { out.push(cur); cur = ''; }
+      else cur += c;
+    }
+    out.push(cur);
+    rows.push(out.map(x => x.trim()));
+  }
+  return rows;
+}
+
+/* ---------- vendors ---------- */
+function sortedVendors() {
+  return [...db.vendors].sort((a, b) => (b.own - a.own) || a.name.localeCompare(b.name));
+}
+function fillVendorSelect(sel, chosen) {
+  sel.innerHTML = '';
+  const ph = document.createElement('option');
+  ph.value = ''; ph.textContent = 'Choose the vendor…';
+  sel.appendChild(ph);
+  for (const v of sortedVendors()) {
+    const o = document.createElement('option');
+    o.value = v.name;
+    o.textContent = v.own ? v.name : `${v.name}  (${v.pct}%)`;
+    sel.appendChild(o);
+  }
+  sel.value = chosen || '';
+}
+
+/* ---------- rendering ---------- */
+function render() {
+  const date = $('saleDate').value;
+  const d = new Date(date + 'T12:00:00');
+  $('dayName').textContent = (date === todayISO() ? 'Today, ' : '') +
+    d.toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  $('bizName').textContent = db.settings.business || '';
+
+  const sales = db.sales.filter(s => s.date === date);
+  const byVendor = new Map();
+  for (const s of sales) {
+    if (!byVendor.has(s.vname)) byVendor.set(s.vname, []);
+    byVendor.get(s.vname).push(s);
+  }
+  const dayTotal = round2(sales.reduce((t, s) => t + s.amount, 0));
+  $('daySummary').innerHTML = `<span>${sales.length} sale${sales.length === 1 ? '' : 's'} this day</span>
+    <b>${money(dayTotal)}</b>`;
+
+  const list = $('dayList');
+  list.innerHTML = '';
+  if (!sales.length) {
+    list.innerHTML = '<div class="card empty">No sales written up for this day yet.</div>';
+  }
+  const names = [...byVendor.keys()].sort((a, b) => a.localeCompare(b));
+  for (const name of names) {
+    const items = byVendor.get(name);
+    const v = vendorBy(items[0].vid, name) || { own: 0, pct: 0 };
+    const total = round2(items.reduce((t, s) => t + s.amount, 0));
+    const comm = v.own ? total : round2(total * v.pct / 100);
+    const card = document.createElement('section');
+    card.className = 'card vendor';
+    card.innerHTML = `<h3>${escapeHtml(name)}<span>${items.length} item${items.length === 1 ? '' : 's'}</span></h3>`;
+    for (const s of items) {
+      const line = document.createElement('div');
+      line.className = 'line';
+      line.innerHTML = `<span class="what">${escapeHtml(s.item || '—')}${s.sent ? '<span class="sent">✓ sent</span>' : ''}</span>
+        <span class="amt">${money(s.amount)}</span>`;
+      line.onclick = () => openEdit(s.uid);
+      card.appendChild(line);
+    }
+    const tot = document.createElement('div');
+    tot.className = 'totals';
+    tot.innerHTML = v.own
+      ? `<div class="due"><span>Total (own stock)</span><span>${money(total)}</span></div>`
+      : `<div><span>Total</span><span>${money(total)}</span></div>
+         <div><span>Less ${v.pct}%</span><span>${money(comm)}</span></div>
+         <div class="due"><span>Due to vendor</span><span>${money(round2(total - comm))}</span></div>`;
+    card.appendChild(tot);
+    list.appendChild(card);
+  }
+
+  const unsent = db.sales.filter(s => !s.sent).length;
+  $('sendBtn').textContent = unsent ? `Send to BankBooks (${unsent} new)` : 'Nothing new to send';
+  $('sendBtn').disabled = !unsent;
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+/* ---------- add / edit ---------- */
+function addSale() {
+  const vname = $('vendor').value;
+  const amount = parseAmount($('amount').value);
+  if (!vname) { toast('Choose the vendor first'); $('vendor').focus(); return; }
+  if (!(amount > 0)) { toast('Type the amount'); $('amount').focus(); return; }
+  const v = vendorBy(null, vname);
+  db.sales.push({
+    uid: newUid(), date: $('saleDate').value, vid: v ? v.id : 0, vname,
+    item: $('item').value.trim(), amount, sent: false, at: Date.now()
+  });
+  save();
+  $('amount').value = '';
+  $('item').value = '';
+  render();
+  toast(`${money(amount)} added for ${vname}`);
+  $('amount').focus();   // same vendor, next item
+}
+function openEdit(uid) {
+  const s = db.sales.find(x => x.uid === uid);
+  if (!s) return;
+  editing = uid;
+  fillVendorSelect($('editVendor'), s.vname);
+  $('editAmount').value = s.amount.toFixed(2);
+  $('editItem').value = s.item || '';
+  $('editSentNote').hidden = !s.sent;
+  for (const id of ['editVendor', 'editAmount', 'editItem', 'editSave', 'editDelete'])
+    $(id).disabled = !!s.sent;
+  $('editDlg').showModal();
+}
+function saveEdit() {
+  const s = db.sales.find(x => x.uid === editing);
+  const amount = parseAmount($('editAmount').value);
+  if (!s || s.sent) return $('editDlg').close();
+  if (!$('editVendor').value) return toast('Choose the vendor');
+  if (!(amount > 0)) return toast('Type the amount');
+  const v = vendorBy(null, $('editVendor').value);
+  s.vname = $('editVendor').value; s.vid = v ? v.id : 0;
+  s.amount = amount; s.item = $('editItem').value.trim();
+  save(); $('editDlg').close(); render();
+}
+function deleteEdit() {
+  const s = db.sales.find(x => x.uid === editing);
+  if (!s || s.sent) return;
+  if (!confirm(`Delete ${money(s.amount)} for ${s.vname}?`)) return;
+  db.sales = db.sales.filter(x => x.uid !== editing);
+  save(); $('editDlg').close(); render();
+}
+
+/* ---------- sending ---------- */
+function buildCSV(sales) {
+  const lines = ['uid,date,vendor_id,vendor,item,amount'];
+  for (const s of sales)
+    lines.push([s.uid, s.date, s.vid || '', s.vname, s.item || '', s.amount.toFixed(2)].map(csvCell).join(','));
+  return lines.join('\r\n') + '\r\n';
+}
+async function send(sales) {
+  if (!sales.length) return toast('Nothing to send');
+  const stamp = new Date();
+  const p = n => String(n).padStart(2, '0');
+  const biz = (db.settings.business || 'Sales').replace(/[^\w-]+/g, '-');
+  const name = `${biz}-sales-${stamp.getFullYear()}-${p(stamp.getMonth() + 1)}-${p(stamp.getDate())}-${p(stamp.getHours())}${p(stamp.getMinutes())}.csv`;
+  const file = new File([buildCSV(sales)], name, { type: 'text/csv' });
+  const uids = sales.map(s => s.uid);
+  const total = round2(sales.reduce((t, s) => t + s.amount, 0));
+
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title: name,
+        text: `${sales.length} sale(s), ${money(total)}, for BankBooks` });
+      markSent(uids);
+      toast(`${sales.length} sale(s) sent`);
+    } catch (e) {
+      if (e.name !== 'AbortError') alert('Could not share the file: ' + e.message);
+    }
+    return;
+  }
+  // No share sheet (e.g. a laptop): download the file instead, then ask.
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file);
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  pendingSend = uids;
+  $('sentText').textContent = `The file ${name} (${sales.length} sale(s), ${money(total)}) was saved ` +
+    'to Downloads. Once it has gone to BankBooks, mark these sales as sent.';
+  $('sentDlg').showModal();
+}
+function markSent(uids) {
+  const set = new Set(uids);
+  for (const s of db.sales) if (set.has(s.uid)) s.sent = true;
+  save(); render();
+}
+
+/* ---------- vendor list from BankBooks ---------- */
+async function loadVendorFile(file) {
+  const rows = parseCSV(await file.text());
+  const head = (rows.shift() || []).map(h => h.toLowerCase());
+  const iId = head.indexOf('vendor_id'), iName = head.indexOf('vendor'),
+        iOwn = head.indexOf('own_stock'), iPct = head.indexOf('commission_pct');
+  if (iName < 0) return alert('That is not a vendor list from BankBooks.');
+  const fromFile = rows.filter(r => r[iName]).map(r => ({
+    id: Number(r[iId]) || 0, name: r[iName], own: Number(r[iOwn]) ? 1 : 0,
+    pct: Number(r[iPct]) || 0 }));
+  // keep vendors added on the phone that BankBooks doesn't know yet
+  const known = new Set(fromFile.map(v => v.name.toLowerCase()));
+  const extra = db.vendors.filter(v => !v.id && !v.own && !known.has(v.name.toLowerCase()));
+  db.vendors = fromFile.concat(extra);
+  if (!db.vendors.some(v => v.own)) db.vendors.unshift({ id: 0, name: 'Own Stock', own: 1, pct: 100 });
+  // unsent sales pick up the BankBooks id
+  for (const s of db.sales) if (!s.sent) {
+    const v = db.vendors.find(x => x.name.toLowerCase() === s.vname.toLowerCase());
+    if (v) { s.vid = v.id; s.vname = v.name; }
+  }
+  save();
+  fillVendorSelect($('vendor'), $('vendor').value);
+  render();
+  $('menuDlg').close();
+  toast(`${fromFile.length} vendors loaded`);
+}
+
+/* ---------- wiring ---------- */
+$('saleDate').value = todayISO();
+$('saleDate').onchange = () => { if (!$('saleDate').value) $('saleDate').value = todayISO(); render(); };
+$('prevDay').onclick = () => { $('saleDate').value = shiftDate($('saleDate').value, -1); render(); };
+$('nextDay').onclick = () => { $('saleDate').value = shiftDate($('saleDate').value, 1); render(); };
+$('addBtn').onclick = addSale;
+$('amount').addEventListener('keydown', e => { if (e.key === 'Enter') addSale(); });
+$('item').addEventListener('keydown', e => { if (e.key === 'Enter') addSale(); });
+$('vendor').onchange = () => { if ($('vendor').value) $('amount').focus(); };
+
+$('editSave').onclick = saveEdit;
+$('editDelete').onclick = deleteEdit;
+$('editCancel').onclick = () => $('editDlg').close();
+
+$('sendBtn').onclick = () => send(db.sales.filter(s => !s.sent));
+$('sentYes').onclick = () => { if (pendingSend) markSent(pendingSend); pendingSend = null; $('sentDlg').close(); };
+$('sentNo').onclick = () => { pendingSend = null; $('sentDlg').close(); };
+
+$('menuBtn').onclick = () => {
+  const n = db.sales.length, unsent = db.sales.filter(s => !s.sent).length;
+  $('mInfo').textContent = `${db.vendors.length} vendors · ${n} sales on this phone (${unsent} not sent yet).`;
+  $('menuDlg').showModal();
+};
+$('mClose').onclick = () => $('menuDlg').close();
+$('mLoadVendors').onclick = () => $('vendorFile').click();
+$('vendorFile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) loadVendorFile(f); };
+$('mAddVendor').onclick = () => { $('menuDlg').close(); $('newVendName').value = ''; $('newVendPct').value = '10'; $('vendDlg').showModal(); };
+$('vendCancel').onclick = () => $('vendDlg').close();
+$('vendSave').onclick = () => {
+  const name = $('newVendName').value.trim().replace(/\s+/g, ' ');
+  const pct = parseAmount($('newVendPct').value);
+  if (!name) return toast('Type the vendor name');
+  if (db.vendors.some(v => v.name.toLowerCase() === name.toLowerCase())) return toast('That vendor is already there');
+  db.vendors.push({ id: 0, name, own: 0, pct: isNaN(pct) ? 10 : pct });
+  save(); fillVendorSelect($('vendor'), name); $('vendDlg').close(); render();
+  toast(`${name} added`);
+};
+$('mResend').onclick = () => {
+  $('menuDlg').close();
+  if (confirm('Send every sale on this phone again? BankBooks skips the ones it already has.'))
+    send(db.sales);
+};
+$('mBusiness').onclick = () => {
+  const b = prompt('Business name (shown at the top and in the file name):', db.settings.business || '');
+  if (b !== null) { db.settings.business = b.trim(); save(); render(); }
+};
+
+fillVendorSelect($('vendor'));
+render();
+
+if ('serviceWorker' in navigator && location.protocol === 'https:')
+  navigator.serviceWorker.register('sw.js');
+</script>
+</body>
+</html>
