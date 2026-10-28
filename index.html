@@ -452,7 +452,8 @@ async function loadVendorFile(file) {
   const head = (rows.shift() || []).map(h => h.toLowerCase());
   const iId = head.indexOf('vendor_id'), iName = head.indexOf('vendor'),
         iOwn = head.indexOf('own_stock'), iPct = head.indexOf('commission_pct');
-  if (iName < 0) return alert('That is not a vendor list from BankBooks.');
+  if (iName < 0 || iId < 0) return alert('That is not a vendor list from BankBooks ' +
+    '(made with Vendor Sales > Send Vendor List to Phone).');
   const fromFile = rows.filter(r => r[iName]).map(r => ({
     id: Number(r[iId]) || 0, name: r[iName], own: Number(r[iOwn]) ? 1 : 0,
     pct: Number(r[iPct]) || 0 }));
@@ -520,10 +521,26 @@ $('mBusiness').onclick = () => {
   if (b !== null) { db.settings.business = b.trim(); save(); render(); }
 };
 
+/* A file shared to the app from WhatsApp, email etc. (see sw.js) */
+async function takeSharedFile() {
+  if (!new URLSearchParams(location.search).has('shared')) return;
+  history.replaceState(null, '', location.pathname);
+  try {
+    const cache = await caches.open('salesbook-inbox');
+    const r = await cache.match('shared-file');
+    if (!r) return toast('Nothing was received - try sharing again');
+    await cache.delete('shared-file');
+    const name = decodeURIComponent(r.headers.get('X-File-Name') || 'file');
+    await loadVendorFile(new File([await r.blob()], name));
+  } catch (e) { alert('Could not read the shared file: ' + e.message); }
+}
+
 fillVendorSelect($('vendor'));
 render();
+takeSharedFile();
 
-if ('serviceWorker' in navigator && location.protocol === 'https:')
+if ('serviceWorker' in navigator &&
+    (location.protocol === 'https:' || location.hostname === 'localhost'))
   navigator.serviceWorker.register('sw.js');
 </script>
 </body>
