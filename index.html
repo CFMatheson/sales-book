@@ -58,6 +58,10 @@
   .btn:disabled { opacity: .45; }
   .row { display: flex; gap: 10px; }
   .row > * { flex: 1; }
+  .row > .grow { flex: 2; }
+  .row > .pct { flex: 1; min-width: 110px; }
+  #pct { font-size: 22px; font-weight: 700; text-align: center; }
+  input:disabled { opacity: .55; }
   .summary { display: flex; justify-content: space-between; align-items: baseline; }
   .summary b { font-size: 22px; }
   .vendor { padding: 0; overflow: hidden; }
@@ -111,9 +115,13 @@
     <label for="vendor">Vendor</label>
     <select id="vendor"></select>
     <div class="row">
-      <div>
+      <div class="grow">
         <label for="amount">Amount (R)</label>
         <input id="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00">
+      </div>
+      <div class="pct">
+        <label for="pct">Commission %</label>
+        <input id="pct" type="text" inputmode="decimal" autocomplete="off">
       </div>
     </div>
     <label for="item">Item (optional)</label>
@@ -140,6 +148,8 @@
   <input id="editAmount" type="text" inputmode="decimal">
   <label for="editItem">Item</label>
   <input id="editItem" type="text">
+  <label for="editPct">Commission %</label>
+  <input id="editPct" type="text" inputmode="decimal">
   <div class="row">
     <button class="btn danger" id="editDelete">Delete</button>
     <button class="btn" id="editSave">Save</button>
@@ -241,6 +251,21 @@ function newUid() {
     b => b.toString(16).padStart(2, '0')).join('') : Math.random().toString(16).slice(2, 14);
   return Date.now().toString(36) + '-' + r;
 }
+function salePct(s, v) {
+  if (v && v.own) return 100;
+  return typeof s.pct === 'number' ? s.pct : (v ? v.pct : 0);
+}
+function saleComm(s, v) { return round2(s.amount * salePct(s, v) / 100); }
+function parsePct(str) {
+  const n = parseAmount(str);
+  return n >= 0 && n <= 100 ? n : NaN;
+}
+// Show the chosen vendor's commission in the % box (own stock: 100, fixed)
+function showVendorPct() {
+  const v = vendorBy(null, $('vendor').value);
+  $('pct').disabled = !v || !!v.own;
+  $('pct').value = v ? String(v.own ? 100 : v.pct) : '';
+}
 function vendorBy(vid, name) {
   return db.vendors.find(v => (vid && v.id === vid) || v.name === name);
 }
@@ -287,7 +312,7 @@ function fillVendorSelect(sel, chosen) {
   for (const v of sortedVendors()) {
     const o = document.createElement('option');
     o.value = v.name;
-    o.textContent = v.own ? v.name : `${v.name}  (${v.pct}%)`;
+    o.textContent = v.name;
     sel.appendChild(o);
   }
   sel.value = chosen || '';
@@ -321,14 +346,17 @@ function render() {
     const items = byVendor.get(name);
     const v = vendorBy(items[0].vid, name) || { own: 0, pct: 0 };
     const total = round2(items.reduce((t, s) => t + s.amount, 0));
-    const comm = v.own ? total : round2(total * v.pct / 100);
+    const comm = v.own ? total : round2(items.reduce((t, s) => t + saleComm(s, v), 0));
+    const pcts = [...new Set(items.map(s => salePct(s, v)))];
+    const lessLabel = pcts.length === 1 ? `Less ${pcts[0]}%` : 'Less commission';
     const card = document.createElement('section');
     card.className = 'card vendor';
     card.innerHTML = `<h3>${escapeHtml(name)}<span>${items.length} item${items.length === 1 ? '' : 's'}</span></h3>`;
     for (const s of items) {
       const line = document.createElement('div');
       line.className = 'line';
-      line.innerHTML = `<span class="what">${escapeHtml(s.item || '—')}${s.sent ? '<span class="sent">✓ sent</span>' : ''}</span>
+      const pctNote = (!v.own && pcts.length > 1) ? ` · ${salePct(s, v)}%` : '';
+      line.innerHTML = `<span class="what">${escapeHtml(s.item || '—')}${pctNote}${s.sent ? '<span class="sent">✓ sent</span>' : ''}</span>
         <span class="amt">${money(s.amount)}</span>`;
       line.onclick = () => openEdit(s.uid);
       card.appendChild(line);
@@ -338,7 +366,7 @@ function render() {
     tot.innerHTML = v.own
       ? `<div class="due"><span>Total (own stock)</span><span>${money(total)}</span></div>`
       : `<div><span>Total</span><span>${money(total)}</span></div>
-         <div><span>Less ${v.pct}%</span><span>${money(comm)}</span></div>
+         <div><span>${lessLabel}</span><span>${money(comm)}</span></div>
          <div class="due"><span>Due to vendor</span><span>${money(round2(total - comm))}</span></div>`;
     card.appendChild(tot);
     list.appendChild(card);
@@ -359,9 +387,13 @@ function addSale() {
   if (!vname) { toast('Choose the vendor first'); $('vendor').focus(); return; }
   if (!(amount > 0)) { toast('Type the amount'); $('amount').focus(); return; }
   const v = vendorBy(null, vname);
+  let pct = v && v.own ? 100 : parsePct($('pct').value);
+  if (isNaN(pct)) { toast('Commission % must be between 0 and 100'); $('pct').focus(); return; }
+  // Her % becomes this vendor's rate from now on (BankBooks follows on import)
+  if (v && !v.own && v.pct !== pct) v.pct = pct;
   db.sales.push({
     uid: newUid(), date: $('saleDate').value, vid: v ? v.id : 0, vname,
-    item: $('item').value.trim(), amount, sent: false, at: Date.now()
+    item: $('item').value.trim(), amount, pct, sent: false, at: Date.now()
   });
   save();
   $('amount').value = '';
@@ -377,8 +409,10 @@ function openEdit(uid) {
   fillVendorSelect($('editVendor'), s.vname);
   $('editAmount').value = s.amount.toFixed(2);
   $('editItem').value = s.item || '';
+  const ev = vendorBy(s.vid, s.vname);
+  $('editPct').value = String(salePct(s, ev));
   $('editSentNote').hidden = !s.sent;
-  for (const id of ['editVendor', 'editAmount', 'editItem', 'editSave', 'editDelete'])
+  for (const id of ['editVendor', 'editAmount', 'editItem', 'editPct', 'editSave', 'editDelete'])
     $(id).disabled = !!s.sent;
   $('editDlg').showModal();
 }
@@ -389,8 +423,10 @@ function saveEdit() {
   if (!$('editVendor').value) return toast('Choose the vendor');
   if (!(amount > 0)) return toast('Type the amount');
   const v = vendorBy(null, $('editVendor').value);
+  const pct = v && v.own ? 100 : parsePct($('editPct').value);
+  if (isNaN(pct)) return toast('Commission % must be between 0 and 100');
   s.vname = $('editVendor').value; s.vid = v ? v.id : 0;
-  s.amount = amount; s.item = $('editItem').value.trim();
+  s.amount = amount; s.item = $('editItem').value.trim(); s.pct = pct;
   save(); $('editDlg').close(); render();
 }
 function deleteEdit() {
@@ -403,9 +439,12 @@ function deleteEdit() {
 
 /* ---------- sending ---------- */
 function buildCSV(sales) {
-  const lines = ['uid,date,vendor_id,vendor,item,amount'];
-  for (const s of sales)
-    lines.push([s.uid, s.date, s.vid || '', s.vname, s.item || '', s.amount.toFixed(2)].map(csvCell).join(','));
+  const lines = ['uid,date,vendor_id,vendor,item,amount,commission_pct'];
+  for (const s of sales) {
+    const v = vendorBy(s.vid, s.vname);
+    lines.push([s.uid, s.date, s.vid || '', s.vname, s.item || '', s.amount.toFixed(2),
+      String(salePct(s, v))].map(csvCell).join(','));
+  }
   return lines.join('\r\n') + '\r\n';
 }
 async function send(sales) {
@@ -458,6 +497,11 @@ async function loadVendorFile(file) {
     id: Number(r[iId]) || 0, name: r[iName], own: Number(r[iOwn]) ? 1 : 0,
     pct: Number(r[iPct]) || 0 }));
   // keep vendors added on the phone that BankBooks doesn't know yet
+  for (const v of fromFile) {
+    const old = db.vendors.find(x => x.name.toLowerCase() === v.name.toLowerCase());
+    if (old && !v.own && db.sales.some(s => !s.sent && s.vname.toLowerCase() === v.name.toLowerCase()))
+      v.pct = old.pct;   // her newer rate hasn't reached BankBooks yet
+  }
   const known = new Set(fromFile.map(v => v.name.toLowerCase()));
   const extra = db.vendors.filter(v => !v.id && !v.own && !known.has(v.name.toLowerCase()));
   db.vendors = fromFile.concat(extra);
@@ -469,6 +513,7 @@ async function loadVendorFile(file) {
   }
   save();
   fillVendorSelect($('vendor'), $('vendor').value);
+  showVendorPct();
   render();
   $('menuDlg').close();
   toast(`${fromFile.length} vendors loaded`);
@@ -482,7 +527,8 @@ $('nextDay').onclick = () => { $('saleDate').value = shiftDate($('saleDate').val
 $('addBtn').onclick = addSale;
 $('amount').addEventListener('keydown', e => { if (e.key === 'Enter') addSale(); });
 $('item').addEventListener('keydown', e => { if (e.key === 'Enter') addSale(); });
-$('vendor').onchange = () => { if ($('vendor').value) $('amount').focus(); };
+$('vendor').onchange = () => { showVendorPct(); if ($('vendor').value) $('amount').focus(); };
+$('pct').addEventListener('keydown', e => { if (e.key === 'Enter') addSale(); });
 
 $('editSave').onclick = saveEdit;
 $('editDelete').onclick = deleteEdit;
@@ -508,7 +554,7 @@ $('vendSave').onclick = () => {
   if (!name) return toast('Type the vendor name');
   if (db.vendors.some(v => v.name.toLowerCase() === name.toLowerCase())) return toast('That vendor is already there');
   db.vendors.push({ id: 0, name, own: 0, pct: isNaN(pct) ? 10 : pct });
-  save(); fillVendorSelect($('vendor'), name); $('vendDlg').close(); render();
+  save(); fillVendorSelect($('vendor'), name); showVendorPct(); $('vendDlg').close(); render();
   toast(`${name} added`);
 };
 $('mResend').onclick = () => {
@@ -536,6 +582,7 @@ async function takeSharedFile() {
 }
 
 fillVendorSelect($('vendor'));
+showVendorPct();
 render();
 takeSharedFile();
 
