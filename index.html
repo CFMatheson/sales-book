@@ -163,6 +163,12 @@
         <input id="pct" class="big center" type="text" inputmode="decimal" autocomplete="off">
       </div>
     </div>
+    <label>Customer paid by</label>
+    <div class="seg" id="salePaidBy">
+      <button type="button" data-m="Card">Card</button>
+      <button type="button" data-m="EFT">EFT</button>
+      <button type="button" data-m="Cash">Cash</button>
+    </div>
     <div class="lineTotal" id="lineTotal"></div>
     <button class="btn" id="addBtn">Add Sale</button>
   </section>
@@ -190,6 +196,12 @@
     <div><label for="editQty">Qty</label><input id="editQty" class="center" type="text" inputmode="decimal"></div>
     <div class="w2"><label for="editPrice">Price each (R)</label><input id="editPrice" type="text" inputmode="decimal"></div>
     <div><label for="editPct">Comm %</label><input id="editPct" class="center" type="text" inputmode="decimal"></div>
+  </div>
+  <label>Customer paid by</label>
+  <div class="seg" id="editPaidBy">
+    <button type="button" data-m="Card">Card</button>
+    <button type="button" data-m="EFT">EFT</button>
+    <button type="button" data-m="Cash">Cash</button>
   </div>
   <div class="row">
     <button class="btn danger" id="editDelete">Delete</button>
@@ -575,8 +587,11 @@ function addSale() {
   if (isNaN(pct)) { toast('Commission % must be between 0 and 100'); $('pct').focus(); return; }
   // Her % becomes this vendor's rate from now on (BankBooks follows on import)
   if (v && !v.own && v.pct !== pct) v.pct = pct;
+  const payType = segValue('salePaidBy');
+  if (!payType) { toast('Choose Card, EFT or Cash'); return; }
+  db.settings.lastPayType = payType;   // stays on what she used last
   db.sales.push({ uid: newUid(), date: $('saleDate').value, vid: v ? v.id : 0, vname,
-    item: $('item').value.trim(), qty, price, amount, pct, sent: false, at: Date.now() });
+    item: $('item').value.trim(), qty, price, amount, pct, payType, sent: false, at: Date.now() });
   save();
   expanded.add(vname);
   $('price').value = ''; $('item').value = ''; $('qty').value = '1';
@@ -593,6 +608,8 @@ function openEdit(uid) {
   $('editQty').value = String(s.qty);
   $('editPrice').value = s.price.toFixed(2);
   $('editPct').value = String(salePct(s, vendorBy(s.vid, s.vname)));
+  setSeg('editPaidBy', s.payType || '');
+  for (const b of $('editPaidBy').children) b.disabled = locked(s);
   const note = s.paidBy ? 'This sale has been paid out and sent to BankBooks. Changes must be made in BankBooks.'
     : s.sent ? 'This sale was already sent to BankBooks. Changes must be made in BankBooks.' : '';
   $('editLockNote').textContent = note;
@@ -611,7 +628,7 @@ function saveEdit() {
   const pct = v && v.own ? 100 : parsePct($('editPct').value);
   if (isNaN(pct)) return toast('Commission % must be between 0 and 100');
   Object.assign(s, { vname: $('editVendor').value, vid: v ? v.id : 0, item: $('editItem').value.trim(),
-    qty, price, amount, pct });
+    qty, price, amount, pct, payType: segValue('editPaidBy') || s.payType || '' });
   save(); $('editDlg').close(); render();
 }
 function deleteEdit() {
@@ -632,6 +649,14 @@ function openPay(name) {
   $('payAmount').value = '';
   refreshPay();
   $('payDlg').showModal();
+}
+// Card / EFT / Cash toggles
+function setSeg(id, m) {
+  for (const b of $(id).children) b.classList.toggle('on', b.dataset.m === m);
+}
+function segValue(id) {
+  const on = $(id).querySelector('.on');
+  return on ? on.dataset.m : '';
 }
 function setMethod(m) {
   for (const b of $('payMethod').children) b.classList.toggle('on', b.dataset.m === m);
@@ -953,17 +978,17 @@ function undoPayment(p) {
 }
 
 /* ---------- sending ---------- */
-const HEAD = 'type,uid,date,vendor_id,vendor,item,qty,price,amount,commission_pct,method,payment_uid';
+const HEAD = 'type,uid,date,vendor_id,vendor,item,qty,price,amount,commission_pct,method,payment_uid,paid_by';
 function saleRow(s) {
   const v = vendorBy(s.vid, s.vname);
   return ['sale', s.uid, s.date, s.vid || '', s.vname, s.item || '', s.qty, s.price.toFixed(2),
-    s.amount.toFixed(2), salePct(s, v), '', s.paidBy || ''];
+    s.amount.toFixed(2), salePct(s, v), '', s.paidBy || '', s.payType || ''];
 }
 function paymentRows(p) {
   const rows = [];
   for (const d of p.deductions)
-    rows.push(['deduction', d.uid, p.date, p.vid || '', p.vname, d.what, '', '', d.amount.toFixed(2), '', '', p.uid]);
-  rows.push(['payment', p.uid, p.date, p.vid || '', p.vname, '', '', '', p.amount.toFixed(2), '', p.method, p.uid]);
+    rows.push(['deduction', d.uid, p.date, p.vid || '', p.vname, d.what, '', '', d.amount.toFixed(2), '', '', p.uid, '']);
+  rows.push(['payment', p.uid, p.date, p.vid || '', p.vname, '', '', '', p.amount.toFixed(2), '', p.method, p.uid, '']);
   return rows;
 }
 function buildCSV(rows) {
@@ -1126,6 +1151,9 @@ $('saleDate').onchange = () => { if (!$('saleDate').value) $('saleDate').value =
 $('prevDay').onclick = () => { $('saleDate').value = shiftDate($('saleDate').value, -1); render(); };
 $('nextDay').onclick = () => { $('saleDate').value = shiftDate($('saleDate').value, 1); render(); };
 $('addBtn').onclick = addSale;
+for (const id of ['salePaidBy', 'editPaidBy'])
+  for (const b of $(id).children) b.onclick = () => setSeg(id, b.dataset.m);
+setSeg('salePaidBy', db.settings.lastPayType || 'Card');
 for (const id of ['item', 'qty', 'price', 'pct'])
   $(id).addEventListener('keydown', e => { if (e.key === 'Enter') addSale(); });
 $('qty').oninput = showLineTotal;
