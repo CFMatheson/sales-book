@@ -84,6 +84,21 @@
   .sum { font-variant-numeric: tabular-nums; background: var(--bg); border-radius: 10px; padding: 10px 12px;
     margin-top: 10px; font-size: 16px; }
   .cardfoot { display: flex; justify-content: flex-end; padding: 0 8px 8px; }
+  .cardtitle { margin: 0 0 2px; font-size: 18px; }
+  h2.section { font-size: 18px; margin: 20px 4px 10px; }
+  .vhead { display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    padding: 12px 14px; cursor: pointer; }
+  .vhead .name { font-weight: 650; font-size: 17px; }
+  .vhead .meta { color: var(--muted); font-size: 14px; }
+  .vhead .owed { font-weight: 700; font-size: 18px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .vhead .chev { color: var(--muted); font-size: 14px; margin-left: 4px; }
+  .vbody { border-top: 1px solid var(--line); }
+  .dayhead { display: flex; justify-content: space-between; padding: 8px 14px 4px; font-size: 14px;
+    color: var(--muted); font-weight: 600; background: var(--bg); }
+  .vfoot { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 8px 8px 14px; }
+  .vfoot .btn { width: auto; padding: 0 20px; margin: 0; min-height: 44px; }
+  .grand { font-weight: 700; }
+  .grand b { font-size: 24px; }
   .empty { text-align: center; color: var(--muted); padding: 24px 8px; }
   footer { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
     background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(6px);
@@ -121,16 +136,15 @@
 </header>
 
 <main>
-  <section class="card">
+  <section class="card" id="entry">
+    <h2 class="cardtitle">Add a Sale</h2>
+    <label for="saleDate">Date of sale</label>
     <div class="daterow">
       <button class="btn secondary small" id="prevDay" aria-label="Previous day">&#8249;</button>
-      <input type="date" id="saleDate" aria-label="Date">
+      <input type="date" id="saleDate" aria-label="Date of sale">
       <button class="btn secondary small" id="nextDay" aria-label="Next day">&#8250;</button>
     </div>
     <div class="day" id="dayName"></div>
-  </section>
-
-  <section class="card" id="entry">
     <label for="vendor">Vendor</label>
     <select id="vendor"></select>
     <label for="item">Item (optional)</label>
@@ -153,8 +167,10 @@
     <button class="btn" id="addBtn">Add Sale</button>
   </section>
 
-  <section class="card summary" id="daySummary"></section>
-  <div id="dayList"></div>
+  <h2 class="section">Owed to Vendors</h2>
+  <div id="owedList"></div>
+  <section class="card summary grand" id="owedTotal"></section>
+  <div id="ownStock"></div>
 </main>
 
 <footer>
@@ -426,6 +442,8 @@ function vendorOwed(v) {
 }
 
 /* ---------- rendering ---------- */
+let expanded = new Set();   // vendor cards opened by a tap
+
 function render() {
   const date = $('saleDate').value;
   const d = new Date(date + 'T12:00:00');
@@ -433,60 +451,107 @@ function render() {
     d.toLocaleDateString('en-ZA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
   $('bizName').textContent = db.settings.business || '';
 
-  const sales = db.sales.filter(s => s.date === date);
-  const byVendor = new Map();
-  for (const s of sales) {
-    if (!byVendor.has(s.vname)) byVendor.set(s.vname, []);
-    byVendor.get(s.vname).push(s);
-  }
-  $('daySummary').innerHTML = `<span>${sales.length} sale${sales.length === 1 ? '' : 's'} this day</span>
-    <b>${money(sum(sales, s => s.amount))}</b>`;
-
-  const list = $('dayList');
+  // Every vendor with unpaid sales or something carried forward, whatever the dates
+  const list = $('owedList');
   list.innerHTML = '';
-  if (!sales.length)
-    list.innerHTML = '<div class="card empty">No sales written up for this day yet.</div>';
-  for (const name of [...byVendor.keys()].sort((a, b) => a.localeCompare(b))) {
-    const items = byVendor.get(name);
-    const v = vendorBy(items[0].vid, name) || { own: 0, pct: 0, name };
-    const total = sum(items, s => s.amount);
-    const comm = v.own ? total : sum(items, s => saleComm(s, v));
-    const pcts = [...new Set(items.map(s => salePct(s, v)))];
-    const card = document.createElement('section');
-    card.className = 'card vendor';
-    card.innerHTML = `<h3>${escapeHtml(name)}<span>${items.length} sale${items.length === 1 ? '' : 's'}</span></h3>`;
-    for (const s of items) {
-      const line = document.createElement('div');
-      line.className = 'line';
-      const pctNote = (!v.own && pcts.length > 1) ? ` · ${salePct(s, v)}%` : '';
-      const tag = s.paidBy ? '<span class="tag">✓ paid</span>' : (s.sent ? '<span class="tag">✓ sent</span>' : '');
-      line.innerHTML = `<span class="what">${escapeHtml(describe(s))}${pctNote}${tag}</span>
-        <span class="amt">${money(s.amount)}</span>`;
-      line.onclick = () => openEdit(s.uid);
-      card.appendChild(line);
+  let grand = 0, nVend = 0;
+  const vendors = sortedVendors().filter(v => !v.own);
+  for (const v of vendors) {
+    const o = vendorOwed(v);
+    if (!o.unpaid.length && !o.carried) continue;
+    nVend++;
+    grand = round2(grand + o.owed);
+    list.appendChild(vendorCard(v, o));
+  }
+  // Sales for vendors no longer in the list (renamed / removed)
+  const known = new Set(db.vendors.map(v => v.name.toLowerCase()));
+  const orphans = db.sales.filter(s => !s.paidBy && !known.has(s.vname.toLowerCase()));
+  for (const name of [...new Set(orphans.map(s => s.vname))]) {
+    const v = { id: 0, name, own: 0, pct: 0, carried: 0 };
+    const o = vendorOwed(v);
+    nVend++; grand = round2(grand + o.owed);
+    list.appendChild(vendorCard(v, o));
+  }
+  if (!nVend) list.innerHTML = '<div class="card empty">Nothing owed to vendors. New sales show here until the vendor is paid.</div>';
+  $('owedTotal').innerHTML = `<span>Owed to vendors${nVend ? ` (${nVend})` : ''}</span><b>${money(grand)}</b>`;
+
+  // Own stock: the business's own sales, until sent at month end
+  const own = db.vendors.find(v => v.own);
+  const ownBox = $('ownStock');
+  ownBox.innerHTML = '';
+  if (own) {
+    const sales = db.sales.filter(s => sameVendor(s, own) && !s.sent);
+    if (sales.length) {
+      const o = { unpaid: sales, total: sum(sales, s => s.amount) };
+      ownBox.appendChild(vendorCard(own, o));
     }
-    const tot = document.createElement('div');
-    tot.className = 'totals';
-    tot.innerHTML = v.own
-      ? `<div class="due"><span>Total (own stock)</span><span>${money(total)}</span></div>`
-      : `<div><span>Total</span><span>${money(total)}</span></div>
-         <div><span>${pcts.length === 1 ? `Less ${pcts[0]}%` : 'Less commission'}</span><span>${money(comm)}</span></div>
-         <div class="due"><span>Due to vendor</span><span>${money(round2(total - comm))}</span></div>`;
-    card.appendChild(tot);
-    if (!v.own && v.name) {
-      const f = document.createElement('div');
-      f.className = 'cardfoot';
-      const b = document.createElement('button');
-      b.className = 'btn link'; b.textContent = `Pay ${name}`;
-      b.onclick = () => openPay(name);
-      f.appendChild(b); card.appendChild(f);
-    }
-    list.appendChild(card);
   }
 
   const unsentPay = db.payments.filter(p => !p.sent).length;
   $('sendPending').hidden = !unsentPay;
   $('sendPending').textContent = `Send ${unsentPay} payment${unsentPay === 1 ? '' : 's'} not yet sent`;
+}
+
+function vendorCard(v, o) {
+  const sales = [...o.unpaid].sort((a, b) => a.date.localeCompare(b.date) || a.at - b.at);
+  const dates = [...new Set(sales.map(s => s.date))];
+  const open = expanded.has(v.name);
+  const card = document.createElement('section');
+  card.className = 'card vendor';
+  const span = !dates.length ? '' : dates.length === 1 ? niceDate(dates[0])
+    : `${niceDate(dates[0])} – ${niceDate(dates[dates.length - 1])}`;
+  const meta = v.own
+    ? `${sales.length} sale${sales.length === 1 ? '' : 's'} not yet sent · ${span}`
+    : `${sales.length} sale${sales.length === 1 ? '' : 's'}${span ? ' · ' + span : ''}${o.carried ? ` · ${money(o.carried)} from before` : ''}`;
+  const head = document.createElement('div');
+  head.className = 'vhead';
+  head.innerHTML = `<div><div class="name">${escapeHtml(v.name)}</div><div class="meta">${meta}</div></div>
+    <div class="owed">${money(v.own ? o.total : o.owed)}<span class="chev">${open ? '▲' : '▼'}</span></div>`;
+  head.onclick = () => { open ? expanded.delete(v.name) : expanded.add(v.name); render(); };
+  card.appendChild(head);
+  if (!open) return card;
+
+  const body = document.createElement('div');
+  body.className = 'vbody';
+  const pcts = [...new Set(sales.map(s => salePct(s, v)))];
+  for (const day of dates) {
+    const items = sales.filter(s => s.date === day);
+    const dh = document.createElement('div');
+    dh.className = 'dayhead';
+    dh.innerHTML = `<span>${new Date(day + 'T12:00:00').toLocaleDateString('en-ZA',
+      { weekday: 'short', day: 'numeric', month: 'short' })}</span><span>${money(sum(items, s => s.amount))}</span>`;
+    body.appendChild(dh);
+    for (const s of items) {
+      const line = document.createElement('div');
+      line.className = 'line';
+      const pctNote = (!v.own && pcts.length > 1) ? ` · ${salePct(s, v)}%` : '';
+      line.innerHTML = `<span class="what">${escapeHtml(describe(s))}${pctNote}${s.sent ? '<span class="tag">✓ sent</span>' : ''}</span>
+        <span class="amt">${money(s.amount)}</span>`;
+      line.onclick = () => openEdit(s.uid);
+      body.appendChild(line);
+    }
+  }
+  const tot = document.createElement('div');
+  tot.className = 'totals';
+  tot.innerHTML = v.own
+    ? `<div class="due"><span>Total own stock</span><span>${money(o.total)}</span></div>`
+    : `<div><span>Total sales</span><span>${money(o.total)}</span></div>
+       <div><span>${pcts.length === 1 ? `Less ${pcts[0]}%` : 'Less commission'}</span><span>${money(o.comm)}</span></div>
+       ${o.carried ? `<div><span>${o.carried > 0 ? 'Owed from before' : 'Overpaid before'}</span><span>${money(o.carried)}</span></div>` : ''}
+       <div class="due"><span>Owed to ${escapeHtml(v.name)}</span><span>${money(o.owed)}</span></div>`;
+  body.appendChild(tot);
+  if (!v.own && v.id !== undefined) {
+    const f = document.createElement('div');
+    f.className = 'vfoot';
+    f.innerHTML = '<span class="hint">Tap a sale to change it</span>';
+    const b = document.createElement('button');
+    b.className = 'btn'; b.textContent = 'Pay';
+    b.onclick = e => { e.stopPropagation(); openPay(v.name); };
+    f.appendChild(b);
+    body.appendChild(f);
+  }
+  card.appendChild(body);
+  return card;
 }
 
 /* ---------- add / edit sales ---------- */
@@ -509,6 +574,7 @@ function addSale() {
   db.sales.push({ uid: newUid(), date: $('saleDate').value, vid: v ? v.id : 0, vname,
     item: $('item').value.trim(), qty, price, amount, pct, sent: false, at: Date.now() });
   save();
+  expanded.add(vname);
   $('price').value = ''; $('item').value = ''; $('qty').value = '1';
   render(); showLineTotal();
   toast(`${money(amount)} added for ${vname}`);
