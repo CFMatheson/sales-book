@@ -245,7 +245,6 @@
 <dialog id="menuDlg" class="menu">
   <h2>Menu</h2>
   <button class="btn secondary" id="mPayments">Payments</button>
-  <button class="btn secondary" id="mMonthEnd">Month End: Send All Sales</button>
   <button class="btn secondary" id="mLoadVendors">Load Vendor List</button>
   <button class="btn secondary" id="mAddVendor">Add a Vendor</button>
   <button class="btn secondary" id="mResend">Send Everything Again</button>
@@ -488,8 +487,12 @@ function render() {
   }
 
   const unsentPay = db.payments.filter(p => !p.sent).length;
-  $('sendPending').hidden = !unsentPay;
-  $('sendPending').textContent = `Send ${unsentPay} payment${unsentPay === 1 ? '' : 's'} not yet sent`;
+  const unsentSales = db.sales.filter(s => !s.sent).length;
+  const parts = [];
+  if (unsentSales) parts.push(`${unsentSales} sale${unsentSales === 1 ? '' : 's'}`);
+  if (unsentPay) parts.push(`${unsentPay} payment${unsentPay === 1 ? '' : 's'}`);
+  $('sendPending').hidden = !parts.length;
+  $('sendPending').textContent = `Send to BankBooks (${parts.join(', ')} new)`;
 }
 
 function vendorCard(v, o) {
@@ -502,7 +505,8 @@ function vendorCard(v, o) {
     : `${niceDate(dates[0])} – ${niceDate(dates[dates.length - 1])}`;
   const meta = v.own
     ? `${sales.length} sale${sales.length === 1 ? '' : 's'} not yet sent · ${span}`
-    : `${sales.length} sale${sales.length === 1 ? '' : 's'}${span ? ' · ' + span : ''}${o.carried ? ` · ${money(o.carried)} from before` : ''}`;
+    : [sales.length ? `${sales.length} sale${sales.length === 1 ? '' : 's'}` : '', span,
+       o.carried ? `${money(o.carried)} ${o.carried > 0 ? 'from before' : 'overpaid'}` : ''].filter(Boolean).join(' · ');
   const head = document.createElement('div');
   head.className = 'vhead';
   head.innerHTML = `<div><div class="name">${escapeHtml(v.name)}</div><div class="meta">${meta}</div></div>
@@ -981,6 +985,20 @@ function sendPayments(payments) {
   return shareFile(rows, fileName('payment'), `Payment: ${who}, ${money(total)}`,
     { sales: [...saleUids], payments: payments.map(p => p.uid) });
 }
+// Everything not yet sent: new sales (any vendor, own stock too) and payments
+function sendUnsent() {
+  const pays = db.payments.filter(p => !p.sent);
+  const uids = new Set(db.sales.filter(s => !s.sent).map(s => s.uid));
+  for (const p of pays) for (const u of p.sales) uids.add(u);
+  const sales = db.sales.filter(s => uids.has(s.uid));
+  const rows = sales.map(saleRow);
+  for (const p of pays) rows.push(...paymentRows(p));
+  const what = [];
+  if (sales.length) what.push(`${sales.length} sale(s), ${money(sum(sales, s => s.amount))}`);
+  if (pays.length) what.push(`${pays.length} payment(s)`);
+  return shareFile(rows, fileName(pays.length ? 'payment' : 'sales'), what.join(' and '),
+    { sales: sales.map(s => s.uid), payments: pays.map(p => p.uid) });
+}
 function sendSales(sales, label) {
   return shareFile(sales.map(saleRow), fileName('sales'),
     `${label}: ${sales.length} sale(s), ${money(sum(sales, s => s.amount))}`,
@@ -1024,7 +1042,8 @@ async function loadVendorFile(file) {
   const head = (rows.shift() || []).map(h => h.toLowerCase());
   const iId = head.indexOf('vendor_id'), iName = head.indexOf('vendor'),
         iOwn = head.indexOf('own_stock'), iPct = head.indexOf('commission_pct'),
-        iBiz = head.indexOf('business'), iShort = head.indexOf('short_name');
+        iBiz = head.indexOf('business'), iShort = head.indexOf('short_name'),
+        iBal = head.indexOf('balance'), iBalDate = head.indexOf('balance_date');
   if (iName < 0 || iId < 0 || head.includes('type'))
     return alert('That is not a vendor list from BankBooks (made with Vendor Sales > Send Vendor List to Phone).');
   // The business name comes from BankBooks with the list
@@ -1033,11 +1052,29 @@ async function loadVendorFile(file) {
   const short = iShort >= 0 ? (rows.find(r => r[iShort]) || [])[iShort] : '';
   if (iShort >= 0) db.settings.short = short || '';
   const fromFile = rows.filter(r => r[iName]).map(r => ({
-    id: Number(r[iId]) || 0, name: r[iName], own: Number(r[iOwn]) ? 1 : 0, pct: Number(r[iPct]) || 0, carried: 0 }));
+    id: Number(r[iId]) || 0, name: r[iName], own: Number(r[iOwn]) ? 1 : 0, pct: Number(r[iPct]) || 0, carried: 0,
+    bb: iBal >= 0 && r[iBal] !== '' && isFinite(Number(r[iBal])) ? Number(r[iBal]) : null }));
+  // Balances: what BankBooks says is owed, less the sales it already has that
+  // are still unpaid on the phone (they show here as sales, not as carried).
+  // A vendor with a payment not yet sent keeps the phone's figure.
+  const resynced = [], kept = [];
   for (const v of fromFile) {
     const old = db.vendors.find(x => x.name.toLowerCase() === v.name.toLowerCase());
+    if (v.bb !== null && !v.own) {
+      if (db.payments.some(p => !p.sent && p.vname.toLowerCase() === v.name.toLowerCase())) {
+        v.carried = old ? old.carried || 0 : 0;
+        kept.push(v.name);
+      } else {
+        const inBooks = db.sales.filter(s => sameVendor(s, v) && !s.paidBy && s.sent);
+        const before = old ? vendorOwed(old).owed : 0;
+        v.carried = round2(v.bb - sum(inBooks, s => s.amount - saleComm(s, v)));
+        if (Math.abs(before - round2(v.carried + vendorOwed({ ...v, carried: 0 }).due)) > 0.004)
+          resynced.push(v.name);
+      }
+    }
+    delete v.bb;
     if (!old) continue;
-    v.carried = old.carried || 0;   // what's carried forward lives on the phone
+    if (iBal < 0) v.carried = old.carried || 0;   // older list: keep the phone's figure
     if (!v.own && db.sales.some(s => !s.sent && !s.paidBy && sameVendor(s, v)))
       v.pct = old.pct;              // her newer rate hasn't reached BankBooks yet
   }
@@ -1059,6 +1096,14 @@ async function loadVendorFile(file) {
   render();
   if ($('menuDlg').open) $('menuDlg').close();
   toast(`${fromFile.length} vendors loaded`);
+  if (iBal >= 0) {
+    const asAt = iBalDate >= 0 && rows[0] ? rows[0][iBalDate] : '';
+    let msg = `Balances brought in line with BankBooks${asAt ? ' (as at ' + longDate(asAt) + ')' : ''}.`;
+    msg += resynced.length ? `\n\nChanged: ${resynced.join(', ')}.` : '\n\nNo vendor\'s balance changed.';
+    if (kept.length) msg += `\n\nNot changed (a payment here has not been sent yet - send it, ` +
+      `then load the list again once it is in BankBooks): ${kept.join(', ')}.`;
+    alert(msg);
+  }
 }
 
 /* A file shared to the app from WhatsApp, email etc. (see sw.js) */
@@ -1104,7 +1149,7 @@ $('payCancel').onclick = () => $('payDlg').close();
 $('paySave').onclick = savePay;
 $('payRemit').onclick = remittanceFromDialog;
 
-$('sendPending').onclick = () => sendPayments(db.payments.filter(p => !p.sent));
+$('sendPending').onclick = sendUnsent;
 $('sentYes').onclick = () => { if (pendingSend) markSent(pendingSend); pendingSend = null; $('sentDlg').close(); };
 $('sentNo').onclick = () => { pendingSend = null; $('sentDlg').close(); };
 
@@ -1118,13 +1163,6 @@ $('menuBtn').onclick = () => {
 $('mClose').onclick = () => $('menuDlg').close();
 $('mPayments').onclick = openPayments;
 $('plistClose').onclick = () => $('plistDlg').close();
-$('mMonthEnd').onclick = () => {
-  $('menuDlg').close();
-  const sales = db.sales.filter(s => !s.sent);
-  if (!sales.length) return toast('All sales have been sent');
-  if (confirm(`Send all ${sales.length} sale(s) not yet sent, paid or not, so BankBooks has the month's sales?`))
-    sendSales(sales, 'Month end');
-};
 $('mLoadVendors').onclick = () => $('vendorFile').click();
 $('vendorFile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) loadVendorFile(f); };
 $('mAddVendor').onclick = () => { $('menuDlg').close(); $('newVendName').value = ''; $('newVendPct').value = '10'; $('vendDlg').showModal(); };
