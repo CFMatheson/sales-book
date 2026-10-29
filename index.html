@@ -286,7 +286,7 @@ function load() {
   let d = null;
   try { d = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* start empty */ }
   if (!d || !Array.isArray(d.sales)) d = {
-    vendors: [{ id: 0, name: 'Own Stock', own: 1, pct: 100 }], sales: [], settings: { business: 'HUM' } };
+    vendors: [{ id: 0, name: 'Own Stock', own: 1, pct: 100 }], sales: [], settings: { business: '' } };
   d.vendors = d.vendors || [];
   d.payments = d.payments || [];
   d.settings = d.settings || {};
@@ -694,7 +694,7 @@ function buildCSV(rows) {
 }
 function fileName(kind) {
   const t = new Date(); const p = n => String(n).padStart(2, '0');
-  const biz = (db.settings.business || 'Sales').replace(/[^\w-]+/g, '-');
+  const biz = (db.settings.short || db.settings.business || 'Sales').replace(/[^\w-]+/g, '-');
   return `${biz}-${kind}-${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}-${p(t.getHours())}${p(t.getMinutes())}.csv`;
 }
 // Send these payments with their sales and deductions
@@ -750,9 +750,15 @@ async function loadVendorFile(file) {
   const rows = parseCSV(await file.text());
   const head = (rows.shift() || []).map(h => h.toLowerCase());
   const iId = head.indexOf('vendor_id'), iName = head.indexOf('vendor'),
-        iOwn = head.indexOf('own_stock'), iPct = head.indexOf('commission_pct');
+        iOwn = head.indexOf('own_stock'), iPct = head.indexOf('commission_pct'),
+        iBiz = head.indexOf('business'), iShort = head.indexOf('short_name');
   if (iName < 0 || iId < 0 || head.includes('type'))
     return alert('That is not a vendor list from BankBooks (made with Vendor Sales > Send Vendor List to Phone).');
+  // The business name comes from BankBooks with the list
+  const biz = iBiz >= 0 ? (rows.find(r => r[iBiz]) || [])[iBiz] : '';
+  if (biz) db.settings.business = biz;
+  const short = iShort >= 0 ? (rows.find(r => r[iShort]) || [])[iShort] : '';
+  if (iShort >= 0) db.settings.short = short || '';
   const fromFile = rows.filter(r => r[iName]).map(r => ({
     id: Number(r[iId]) || 0, name: r[iName], own: Number(r[iOwn]) ? 1 : 0, pct: Number(r[iPct]) || 0, carried: 0 }));
   for (const v of fromFile) {
