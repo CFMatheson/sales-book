@@ -210,10 +210,12 @@
     <button type="button" data-m="Cash">Cash</button>
   </div>
   <div class="sum" id="payAfter"></div>
+  <button class="btn secondary" id="payRemit">Remittance for the Vendor (PDF)</button>
   <div class="row">
     <button class="btn secondary" id="payCancel">Cancel</button>
     <button class="btn" id="paySave">Paid &amp; Send</button>
   </div>
+  <p class="hint">Send the remittance to the vendor, make the payment, then tap Paid &amp; Send.</p>
 </dialog>
 
 <!-- Payments -->
@@ -589,6 +591,7 @@ function refreshPay() {
     $('paySummary').innerHTML = '<div>Choose who is being paid.</div>';
     $('payAfter').innerHTML = '';
     $('paySave').disabled = true;
+    $('payRemit').disabled = true;
     return;
   }
   const o = vendorOwed(v);
@@ -608,6 +611,7 @@ function refreshPay() {
     `${dedTotal ? `<div><span>Deductions</span><span>${money(dedTotal)}</span></div>` : ''}
      <div class="due"><span>${left < 0 ? 'Overpaid (carried forward)' : 'Still owed after this'}</span><span>${money(Math.abs(left))}</span></div>`;
   $('paySave').disabled = false;
+  $('payRemit').disabled = false;
 }
 async function savePay() {
   const v = vendorBy(null, $('payVendor').value);
@@ -640,6 +644,205 @@ async function savePay() {
   await sendPayments([p]);
 }
 
+/* ---------- remittance advice (PDF) ----------
+   A small PDF writer (Helvetica, A4) so the app needs no extra files and
+   works without signal. */
+const HELV = (() => {
+  const w = {}; const set = (chars, v) => { for (const c of chars) w[c] = v; };
+  set(' !,./:;I[\\]ft', 278); set('"', 355); set('#$0123456789?L_abdeghnopqu', 556);
+  set('%', 889); set('&ABEKPSVXY', 667); set("'", 191); set('()-`r', 333); set('*', 389);
+  set('+<=>~', 584); set('@', 1015); set('CDHNRUw', 722); set('FTZ', 611); set('GOQ', 778);
+  set('J', 500); set('M', 833); set('W', 944); set('^', 469); set('cksvxyz', 500);
+  set('ijl', 222); set('m', 833); set('{}', 334); set('|', 260);
+  return w;
+})();
+function textWidth(s, size, bold) {
+  let t = 0;
+  for (const c of s) t += HELV[c] || 556;
+  return t * size / 1000 * (bold ? 1.05 : 1);
+}
+function pdfText(s) {
+  // WinAnsi: keep Latin-1, map a few common characters, escape PDF specials
+  s = String(s).replace(/[–—]/g, '-').replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"').replace(/×/g, 'x').replace(/[^\x20-\xFF]/g, '?');
+  return s.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+}
+class Pdf {
+  constructor() { this.pages = []; this.newPage(); }
+  newPage() { this.cur = []; this.pages.push(this.cur); }
+  text(x, y, s, o = {}) {
+    const size = o.size || 10, bold = !!o.bold;
+    s = String(s);
+    if (o.max) while (s.length > 1 && textWidth(s, size, bold) > o.max) s = s.slice(0, -2) + '…';
+    s = s.replace(/…$/, '...');
+    let px = x;
+    if (o.align === 'right') px = x - textWidth(s, size, bold);
+    const g = o.gray != null ? o.gray : 0;
+    this.cur.push(`BT ${g} g /${bold ? 'F2' : 'F1'} ${size} Tf ${px.toFixed(2)} ${(842 - y).toFixed(2)} Td (${pdfText(s)}) Tj ET`);
+  }
+  line(x1, y1, x2, y2, w = 0.6, gray = 0.6) {
+    this.cur.push(`${gray} G ${w} w ${x1} ${842 - y1} m ${x2} ${842 - y2} l S`);
+  }
+  box(x, y, w, h, r, g, b) {
+    this.cur.push(`${r} ${g} ${b} rg ${x} ${842 - y - h} ${w} ${h} re f`);
+  }
+  bytes() {
+    const objs = [];
+    const add = s => { objs.push(s); return objs.length; };
+    const cat = add('');                       // filled in below
+    const pagesId = add('');
+    const f1 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>');
+    const f2 = add('<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>');
+    const kids = [];
+    for (const ops of this.pages) {
+      const content = ops.join('\n');
+      const cId = add(`<< /Length ${content.length} >>\nstream\n${content}\nendstream`);
+      kids.push(add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595 842] ` +
+        `/Resources << /Font << /F1 ${f1} 0 R /F2 ${f2} 0 R >> >> /Contents ${cId} 0 R >>`));
+    }
+    objs[cat - 1] = `<< /Type /Catalog /Pages ${pagesId} 0 R >>`;
+    objs[pagesId - 1] = `<< /Type /Pages /Kids [${kids.map(k => k + ' 0 R').join(' ')}] /Count ${kids.length} >>`;
+    let out = '%PDF-1.4\n';
+    const offs = [];
+    objs.forEach((o, i) => { offs.push(out.length); out += `${i + 1} 0 obj\n${o}\nendobj\n`; });
+    const xref = out.length;
+    out += `xref\n0 ${objs.length + 1}\n0000000000 65535 f \n` +
+      offs.map(n => String(n).padStart(10, '0') + ' 00000 n \n').join('') +
+      `trailer\n<< /Size ${objs.length + 1} /Root ${cat} 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+    const b = new Uint8Array(out.length);
+    for (let i = 0; i < out.length; i++) b[i] = out.charCodeAt(i) & 0xFF;
+    return b;
+  }
+}
+const longDate = iso => new Date(iso + 'T12:00:00').toLocaleDateString('en-ZA',
+  { day: 'numeric', month: 'short', year: 'numeric' });
+const pdfMoney = n => (n < 0 ? '-R ' : 'R ') + Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
+// r: { vendor, date, method, ref, sales[], carried, deductions[{what,amount}], amount }
+function remittancePdf(r) {
+  const pdf = new Pdf();
+  const L = 50, R = 545;
+  const biz = db.settings.business || '';
+  const v = vendorBy(null, r.vendor) || { own: 0, pct: 0, name: r.vendor };
+  const sales = [...r.sales].sort((a, b) => a.date.localeCompare(b.date) || a.at - b.at);
+  const total = sum(sales, s => s.amount);
+  const comm = sum(sales, s => saleComm(s, v));
+  const pcts = [...new Set(sales.map(s => salePct(s, v)))];
+  const owed = round2(r.carried + total - comm);
+  const dedTotal = sum(r.deductions, d => d.amount);
+  const left = round2(owed - dedTotal - r.amount);
+
+  const head = first => {
+    pdf.box(0, 0, 595, 8, 0.184, 0.420, 0.310);
+    pdf.text(L, 52, biz || 'Remittance Advice', { size: 18, bold: true, max: 330 });
+    pdf.text(R, 50, 'REMITTANCE ADVICE', { size: 12, bold: true, align: 'right', gray: 0.25 });
+    pdf.line(L, 66, R, 66, 1, 0.75);
+    if (first) {
+      pdf.text(L, 90, 'Paid to', { size: 9, gray: 0.4 });
+      pdf.text(L, 106, r.vendor, { size: 13, bold: true, max: 300 });
+      pdf.text(380, 90, 'Date', { size: 9, gray: 0.4 });
+      pdf.text(R, 90, longDate(r.date), { size: 10, align: 'right' });
+      pdf.text(380, 106, 'Payment by', { size: 9, gray: 0.4 });
+      pdf.text(R, 106, r.method === 'Cash' ? 'Cash' : 'EFT', { size: 10, align: 'right' });
+      if (r.ref) {
+        pdf.text(380, 122, 'Reference', { size: 9, gray: 0.4 });
+        pdf.text(R, 122, r.ref, { size: 10, align: 'right' });
+      }
+    }
+    return first ? 150 : 90;
+  };
+  const tableHead = y => {
+    pdf.text(L, y, 'Date', { size: 9, bold: true });
+    pdf.text(115, y, 'Item', { size: 9, bold: true });
+    pdf.text(370, y, 'Qty', { size: 9, bold: true, align: 'right' });
+    pdf.text(450, y, 'Price each', { size: 9, bold: true, align: 'right' });
+    pdf.text(R, y, 'Amount', { size: 9, bold: true, align: 'right' });
+    pdf.line(L, y + 5, R, y + 5);
+    return y + 19;
+  };
+
+  let y = tableHead(head(true));
+  if (!sales.length) {
+    pdf.text(L, y, 'No new sales in this payment.', { size: 10, gray: 0.4 });
+    y += 16;
+  }
+  for (const s of sales) {
+    if (y > 760) { pdf.newPage(); y = tableHead(head(false)); }
+    pdf.text(L, y, longDate(s.date), { size: 9.5 });
+    pdf.text(115, y, s.item || '-', { size: 9.5, max: 215 });
+    pdf.text(370, y, String(s.qty), { size: 9.5, align: 'right' });
+    pdf.text(450, y, pdfMoney(s.price), { size: 9.5, align: 'right' });
+    pdf.text(R, y, pdfMoney(s.amount), { size: 9.5, align: 'right' });
+    y += 15;
+  }
+  pdf.line(L, y - 9, R, y - 9);
+
+  // Totals
+  const rows = [['Total sales', total]];
+  rows.push([pcts.length === 1 ? `Less commission (${pcts[0]}%)` : 'Less commission', -comm]);
+  if (r.carried) rows.push([r.carried > 0 ? 'Owed from before' : 'Overpaid before', r.carried]);
+  const needed = 20 * (rows.length + r.deductions.length + 4);
+  if (y + needed > 800) { pdf.newPage(); y = head(false); }
+  y += 8;
+  const tot = (label, val, o = {}) => {
+    pdf.text(300, y, label, { size: 10.5, bold: o.bold, gray: o.gray });
+    pdf.text(R, y, pdfMoney(val), { size: 10.5, bold: o.bold, align: 'right', gray: o.gray });
+    y += 18;
+  };
+  for (const [l, val] of rows) tot(l, val);
+  pdf.line(300, y - 12, R, y - 12);
+  tot('Amount owed', owed, { bold: true });
+  for (const d of r.deductions) tot(`Less ${d.what}`, -d.amount);
+  y += 4;
+  pdf.box(292, y - 15, R - 292 + 8, 24, 0.906, 0.941, 0.918);
+  tot(r.method === 'Cash' ? 'Payment (cash)' : 'Payment (EFT)', r.amount, { bold: true });
+  y += 2;
+  if (left) tot(left > 0 ? 'Still owed after this payment' : 'Overpaid (carried forward)',
+    Math.abs(left), { gray: 0.3 });
+
+  pdf.text(L, 815, `${biz ? biz + ' - ' : ''}remittance advice${r.ref ? ' ' + r.ref : ''}`,
+    { size: 8, gray: 0.55 });
+  const name = `Remittance-${r.vendor}-${r.date}`.replace(/[^\w-]+/g, '-') + '.pdf';
+  return new File([pdf.bytes()], name, { type: 'application/pdf' });
+}
+const payRef = uid => 'P' + uid.replace(/[^a-z0-9]/gi, '').slice(-6).toUpperCase();
+
+async function shareRemittance(file, vendor) {
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: file.name, text: `Remittance advice for ${vendor}` }); }
+    catch (e) { if (e.name !== 'AbortError') alert('Could not share the PDF: ' + e.message); }
+    return;
+  }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file);
+  a.download = file.name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  toast('Remittance saved to Downloads');
+}
+// From the Pay screen, before the payment is made
+function remittanceFromDialog() {
+  const v = vendorBy(null, $('payVendor').value);
+  if (!v) return toast('Choose the vendor');
+  const deds = readDeds();
+  for (const d of deds) {
+    if (!d.what) return toast('Say what each deduction is for');
+    if (!(d.amount > 0)) return toast(`Type the amount for ${d.what}`);
+  }
+  const amount = parseNum($('payAmount').value);
+  if (isNaN(amount) || amount < 0) return toast('Type the amount to be paid');
+  const o = vendorOwed(v);
+  shareRemittance(remittancePdf({ vendor: v.name, date: $('payDate').value || todayISO(),
+    method: payMethod(), ref: '', sales: o.unpaid, carried: o.carried, deductions: deds, amount }), v.name);
+}
+// For a payment already made (Menu > Payments)
+function remittanceForPayment(p) {
+  const ids = new Set(p.sales);
+  shareRemittance(remittancePdf({ vendor: p.vname, date: p.date, method: p.method, ref: payRef(p.uid),
+    sales: db.sales.filter(s => ids.has(s.uid)), carried: p.carriedBefore || 0,
+    deductions: p.deductions, amount: p.amount }), p.vname);
+}
+
 /* ---------- payments list ---------- */
 function openPayments() {
   const list = $('plist');
@@ -652,6 +855,10 @@ function openPayments() {
     row.innerHTML = `<span class="what">${niceDate(p.date)} · ${escapeHtml(p.vname)} · ${p.method}
       ${ded ? ` · less ${money(ded)}` : ''}${p.sent ? '<span class="tag">✓ sent</span>' : ' <span class="warn">not sent</span>'}</span>
       <span class="amt">${money(p.amount)}</span>`;
+    const rb = document.createElement('button');
+    rb.className = 'btn link'; rb.textContent = 'Remittance';
+    rb.onclick = () => remittanceForPayment(p);
+    row.appendChild(rb);
     if (!p.sent && isLastPayment(p)) {
       const b = document.createElement('button');
       b.className = 'btn link'; b.textContent = 'Undo';
@@ -829,6 +1036,7 @@ $('addDed').onclick = () => {
 for (const b of $('payMethod').children) b.onclick = () => setMethod(b.dataset.m);
 $('payCancel').onclick = () => $('payDlg').close();
 $('paySave').onclick = savePay;
+$('payRemit').onclick = remittanceFromDialog;
 
 $('sendPending').onclick = () => sendPayments(db.payments.filter(p => !p.sent));
 $('sentYes').onclick = () => { if (pendingSend) markSent(pendingSend); pendingSend = null; $('sentDlg').close(); };

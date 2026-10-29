@@ -1,5 +1,5 @@
 // Keeps the app working without signal. Bump VERSION when the app changes.
-const VERSION = 'salesbook-6';
+const VERSION = 'salesbook-7';
 const INBOX = 'salesbook-inbox';
 const FILES = ['./', 'index.html', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 
