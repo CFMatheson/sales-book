@@ -29,9 +29,10 @@
     }
   }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   html, body { margin: 0; background: var(--bg); color: var(--ink);
     font: 17px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-  body { padding-bottom: 96px; }
+  body { padding-bottom: 150px; }
   header { position: sticky; top: 0; z-index: 5; background: var(--brand); color: var(--brand-ink);
     padding: 12px 16px; display: flex; align-items: center; gap: 12px; }
   header h1 { font-size: 20px; margin: 0; flex: 1; font-weight: 650; }
@@ -43,25 +44,28 @@
     padding: 14px; margin-bottom: 12px; }
   .daterow { display: flex; align-items: center; gap: 8px; }
   .daterow input { flex: 1; text-align: center; font-weight: 600; }
-  .daterow .day { text-align: center; color: var(--muted); font-size: 14px; margin-top: 6px; }
+  .day { text-align: center; color: var(--muted); font-size: 14px; margin-top: 6px; }
   label { display: block; font-size: 14px; color: var(--muted); margin: 10px 0 4px; }
   input, select { width: 100%; font: inherit; color: var(--ink); background: var(--card);
     border: 1.5px solid var(--line); border-radius: 10px; padding: 11px 12px; min-height: 48px; }
   input:focus, select:focus { outline: none; border-color: var(--brand); }
-  #amount { font-size: 26px; font-weight: 700; }
+  input:disabled, select:disabled { opacity: .55; }
+  .big { font-size: 22px; font-weight: 700; }
+  .center { text-align: center; }
   .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
     min-height: 52px; border: 0; border-radius: 12px; font: inherit; font-weight: 650; cursor: pointer;
     background: var(--brand); color: var(--brand-ink); margin-top: 14px; }
   .btn.secondary { background: transparent; color: var(--brand); border: 1.5px solid var(--brand); }
   .btn.danger { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); }
   .btn.small { min-height: 40px; width: auto; padding: 0 14px; margin: 0; font-size: 15px; }
+  .btn.link { background: transparent; color: var(--brand); min-height: 40px; margin: 0; width: auto;
+    padding: 0 6px; text-decoration: underline; }
   .btn:disabled { opacity: .45; }
-  .row { display: flex; gap: 10px; }
-  .row > * { flex: 1; }
-  .row > .grow { flex: 2; }
-  .row > .pct { flex: 1; min-width: 110px; }
-  #pct { font-size: 22px; font-weight: 700; text-align: center; }
-  input:disabled { opacity: .55; }
+  .row { display: flex; gap: 10px; align-items: flex-end; }
+  .row > * { flex: 1; min-width: 0; }
+  .row > .w2 { flex: 2; }
+  .lineTotal { text-align: right; color: var(--muted); margin-top: 8px; font-variant-numeric: tabular-nums; }
+  .lineTotal b { color: var(--ink); font-size: 20px; }
   .summary { display: flex; justify-content: space-between; align-items: baseline; }
   .summary b { font-size: 22px; }
   .vendor { padding: 0; overflow: hidden; }
@@ -73,26 +77,41 @@
   .line:active { background: var(--bg); }
   .line .what { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .line .amt { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
-  .sent { color: var(--ok); font-size: 13px; margin-left: 6px; }
+  .tag { color: var(--ok); font-size: 13px; margin-left: 6px; }
   .totals { padding: 10px 14px; font-variant-numeric: tabular-nums; }
-  .totals div { display: flex; justify-content: space-between; }
-  .totals .due { font-weight: 700; }
+  .totals div, .sum div { display: flex; justify-content: space-between; gap: 10px; }
+  .totals .due, .sum .due { font-weight: 700; }
+  .sum { font-variant-numeric: tabular-nums; background: var(--bg); border-radius: 10px; padding: 10px 12px;
+    margin-top: 10px; font-size: 16px; }
+  .cardfoot { display: flex; justify-content: flex-end; padding: 0 8px 8px; }
   .empty { text-align: center; color: var(--muted); padding: 24px 8px; }
-  footer { position: fixed; left: 0; right: 0; bottom: 0; padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  footer { position: fixed; left: 0; right: 0; bottom: 0; padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
     background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(6px);
     border-top: 1px solid var(--line); }
-  footer .btn { margin: 0; max-width: 608px; margin-inline: auto; display: flex; }
-  dialog { border: 0; border-radius: 18px; padding: 18px; width: min(92vw, 460px); background: var(--card);
-    color: var(--ink); }
+  footer .btn { margin: 0 auto; max-width: 608px; display: flex; }
+  footer .btn + .btn { margin-top: 8px; }
+  dialog { border: 0; border-radius: 18px; padding: 18px; width: min(94vw, 480px); max-height: 92vh;
+    background: var(--card); color: var(--ink); }
   dialog::backdrop { background: rgba(0,0,0,.45); }
   dialog h2 { margin: 0 0 6px; font-size: 19px; }
   dialog p { margin: 6px 0; color: var(--muted); font-size: 15px; }
   .menu .btn { margin-top: 10px; }
-  .toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); background: var(--ink);
+  .seg { display: flex; gap: 8px; }
+  .seg button { flex: 1; min-height: 48px; border-radius: 10px; border: 1.5px solid var(--brand);
+    background: transparent; color: var(--brand); font: inherit; font-weight: 650; }
+  .seg button.on { background: var(--brand); color: var(--brand-ink); }
+  .ded { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .ded input:first-child { flex: 2; }
+  .ded input:nth-child(2) { flex: 1; }
+  .ded button { flex: 0 0 44px; height: 44px; border-radius: 10px; border: 1.5px solid var(--accent);
+    background: transparent; color: var(--accent); font-size: 20px; }
+  .plist .line { cursor: default; }
+  .toast { position: fixed; left: 50%; bottom: 140px; transform: translateX(-50%); background: var(--ink);
     color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 15px; opacity: 0;
     transition: opacity .2s; pointer-events: none; max-width: 90vw; text-align: center; z-index: 20; }
   .toast.show { opacity: 1; }
   .hint { font-size: 14px; color: var(--muted); }
+  .warn { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -114,18 +133,23 @@
   <section class="card" id="entry">
     <label for="vendor">Vendor</label>
     <select id="vendor"></select>
-    <div class="row">
-      <div class="grow">
-        <label for="amount">Amount (R)</label>
-        <input id="amount" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00">
-      </div>
-      <div class="pct">
-        <label for="pct">Commission %</label>
-        <input id="pct" type="text" inputmode="decimal" autocomplete="off">
-      </div>
-    </div>
     <label for="item">Item (optional)</label>
     <input id="item" type="text" autocomplete="off" placeholder="e.g. Bunny">
+    <div class="row">
+      <div>
+        <label for="qty">Qty</label>
+        <input id="qty" class="big center" type="text" inputmode="decimal" autocomplete="off" value="1">
+      </div>
+      <div class="w2">
+        <label for="price">Price each (R)</label>
+        <input id="price" class="big" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00">
+      </div>
+      <div>
+        <label for="pct">Comm %</label>
+        <input id="pct" class="big center" type="text" inputmode="decimal" autocomplete="off">
+      </div>
+    </div>
+    <div class="lineTotal" id="lineTotal"></div>
     <button class="btn" id="addBtn">Add Sale</button>
   </section>
 
@@ -134,22 +158,23 @@
 </main>
 
 <footer>
-  <button class="btn" id="sendBtn">Send to BankBooks</button>
+  <button class="btn" id="payBtn">Pay a Vendor</button>
+  <button class="btn secondary" id="sendPending" hidden></button>
 </footer>
 
 <!-- Edit a sale -->
 <dialog id="editDlg">
   <h2>Change Sale</h2>
-  <p id="editSentNote" hidden>This sale was already sent to BankBooks. Changes here won't reach
-    BankBooks: ask for it to be changed there.</p>
+  <p id="editLockNote" class="warn" hidden></p>
   <label for="editVendor">Vendor</label>
   <select id="editVendor"></select>
-  <label for="editAmount">Amount (R)</label>
-  <input id="editAmount" type="text" inputmode="decimal">
   <label for="editItem">Item</label>
   <input id="editItem" type="text">
-  <label for="editPct">Commission %</label>
-  <input id="editPct" type="text" inputmode="decimal">
+  <div class="row">
+    <div><label for="editQty">Qty</label><input id="editQty" class="center" type="text" inputmode="decimal"></div>
+    <div class="w2"><label for="editPrice">Price each (R)</label><input id="editPrice" type="text" inputmode="decimal"></div>
+    <div><label for="editPct">Comm %</label><input id="editPct" class="center" type="text" inputmode="decimal"></div>
+  </div>
   <div class="row">
     <button class="btn danger" id="editDelete">Delete</button>
     <button class="btn" id="editSave">Save</button>
@@ -157,12 +182,55 @@
   <button class="btn secondary" id="editCancel">Cancel</button>
 </dialog>
 
+<!-- Pay a vendor -->
+<dialog id="payDlg">
+  <h2>Pay a Vendor</h2>
+  <label for="payVendor">Vendor</label>
+  <select id="payVendor"></select>
+  <div class="sum" id="paySummary"></div>
+
+  <label>Deductions (kept back from the payment)</label>
+  <div id="dedList"></div>
+  <button class="btn secondary small" id="addDed" style="margin-top:8px">+ Add a deduction</button>
+  <datalist id="dedTypes"></datalist>
+
+  <div class="row">
+    <div class="w2">
+      <label for="payAmount">Amount paid (R)</label>
+      <input id="payAmount" class="big" type="text" inputmode="decimal" autocomplete="off">
+    </div>
+    <div class="w2">
+      <label for="payDate">Date paid</label>
+      <input id="payDate" type="date">
+    </div>
+  </div>
+  <label>Paid by</label>
+  <div class="seg" id="payMethod">
+    <button type="button" data-m="EFT" class="on">EFT</button>
+    <button type="button" data-m="Cash">Cash</button>
+  </div>
+  <div class="sum" id="payAfter"></div>
+  <div class="row">
+    <button class="btn secondary" id="payCancel">Cancel</button>
+    <button class="btn" id="paySave">Paid &amp; Send</button>
+  </div>
+</dialog>
+
+<!-- Payments -->
+<dialog id="plistDlg">
+  <h2>Payments</h2>
+  <div class="plist" id="plist"></div>
+  <button class="btn" id="plistClose">Close</button>
+</dialog>
+
 <!-- Menu -->
 <dialog id="menuDlg" class="menu">
   <h2>Menu</h2>
+  <button class="btn secondary" id="mPayments">Payments</button>
+  <button class="btn secondary" id="mMonthEnd">Month End: Send All Sales</button>
   <button class="btn secondary" id="mLoadVendors">Load Vendor List</button>
   <button class="btn secondary" id="mAddVendor">Add a Vendor</button>
-  <button class="btn secondary" id="mResend">Send All Sales Again</button>
+  <button class="btn secondary" id="mResend">Send Everything Again</button>
   <button class="btn secondary" id="mBusiness">Business Name</button>
   <p class="hint" id="mInfo"></p>
   <button class="btn" id="mClose">Close</button>
@@ -172,7 +240,7 @@
 <!-- Add vendor -->
 <dialog id="vendDlg">
   <h2>Add a Vendor</h2>
-  <p>Use the same name as in BankBooks. New names are added in BankBooks when the sales are imported.</p>
+  <p>Use the same name as in BankBooks. New names are added in BankBooks when the file is imported.</p>
   <label for="newVendName">Vendor name</label>
   <input id="newVendName" type="text" autocomplete="off">
   <label for="newVendPct">Commission %</label>
@@ -197,28 +265,38 @@
 
 <script>
 'use strict';
-/* Sales Book: write up sales per vendor per day, then send them to BankBooks
-   as a CSV file (uid,date,vendor_id,vendor,item,amount). Each sale has a
-   unique id, so BankBooks never imports the same sale twice. Everything is
-   kept on this phone (localStorage) until it is sent. */
+/* Sales Book: write up sales per vendor per day. When a vendor is paid, that
+   vendor's sales, the deductions (e.g. stall hire) and the payment go to
+   BankBooks in one CSV file:
+
+     type,uid,date,vendor_id,vendor,item,qty,price,amount,commission_pct,method,payment_uid
+
+   type is sale, deduction or payment. Every row has a unique uid, so BankBooks
+   never imports anything twice. Everything stays on this phone until sent. */
 
 const KEY = 'salesbook.v1';
 const $ = id => document.getElementById(id);
 
 let db = load();
 let editing = null;      // uid of the sale in the edit dialog
-let pendingSend = null;  // uids waiting for "did it send?"
+let pendingSend = null;  // what is waiting for "did it send?"
+let payTouched = false;  // she typed her own payment amount
 
 function load() {
-  try {
-    const d = JSON.parse(localStorage.getItem(KEY));
-    if (d && Array.isArray(d.sales)) return Object.assign({ vendors: [], settings: {} }, d);
-  } catch (e) { /* start empty */ }
-  return {
-    vendors: [{ id: 0, name: 'Own Stock', own: 1, pct: 100 }],
-    sales: [],
-    settings: { business: 'HUM' }
-  };
+  let d = null;
+  try { d = JSON.parse(localStorage.getItem(KEY)); } catch (e) { /* start empty */ }
+  if (!d || !Array.isArray(d.sales)) d = {
+    vendors: [{ id: 0, name: 'Own Stock', own: 1, pct: 100 }], sales: [], settings: { business: 'HUM' } };
+  d.vendors = d.vendors || [];
+  d.payments = d.payments || [];
+  d.settings = d.settings || {};
+  d.settings.dedTypes = d.settings.dedTypes || ['Stall Hire'];
+  for (const s of d.sales) {               // older sales had only an amount
+    if (typeof s.qty !== 'number') s.qty = 1;
+    if (typeof s.price !== 'number') s.price = s.amount;
+  }
+  for (const v of d.vendors) if (typeof v.carried !== 'number') v.carried = 0;
+  return d;
 }
 function save() {
   try { localStorage.setItem(KEY, JSON.stringify(db)); }
@@ -227,8 +305,10 @@ function save() {
 if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
 
 /* ---------- helpers ---------- */
-const money = n => 'R' + n.toLocaleString('en-ZA', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const round2 = n => Math.round(n * 100) / 100;
+const money = n => (n < 0 ? '-R' : 'R') + Math.abs(n).toLocaleString('en-ZA',
+  { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const round2 = n => Math.round((n + Number.EPSILON) * 100) / 100;
+const sum = (a, f) => round2(a.reduce((t, x) => t + f(x), 0));
 function todayISO() {
   const d = new Date();
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -238,7 +318,10 @@ function shiftDate(iso, days) {
   d.setDate(d.getDate() + days);
   return d.toISOString().slice(0, 10);
 }
-function parseAmount(s) {
+function niceDate(iso) {
+  return new Date(iso + 'T12:00:00').toLocaleDateString('en-ZA', { day: 'numeric', month: 'short' });
+}
+function parseNum(s) {
   // accepts 390, 390.50, 390,50, R 1 390.50
   s = String(s).replace(/[Rr\s]/g, '');
   if (/,\d{1,2}$/.test(s) && !s.includes('.')) s = s.replace(',', '.');
@@ -246,35 +329,34 @@ function parseAmount(s) {
   const n = Number(s);
   return isFinite(n) && s !== '' ? round2(n) : NaN;
 }
+function parsePct(str) {
+  const n = parseNum(str);
+  return n >= 0 && n <= 100 ? n : NaN;
+}
 function newUid() {
   const r = crypto.getRandomValues ? Array.from(crypto.getRandomValues(new Uint8Array(6)),
     b => b.toString(16).padStart(2, '0')).join('') : Math.random().toString(16).slice(2, 14);
   return Date.now().toString(36) + '-' + r;
 }
+function vendorBy(vid, name) {
+  return db.vendors.find(v => (vid && v.id === vid) || v.name === name);
+}
+function sameVendor(s, v) { return s.vname.toLowerCase() === v.name.toLowerCase(); }
 function salePct(s, v) {
   if (v && v.own) return 100;
   return typeof s.pct === 'number' ? s.pct : (v ? v.pct : 0);
 }
 function saleComm(s, v) { return round2(s.amount * salePct(s, v) / 100); }
-function parsePct(str) {
-  const n = parseAmount(str);
-  return n >= 0 && n <= 100 ? n : NaN;
-}
-// Show the chosen vendor's commission in the % box (own stock: 100, fixed)
-function showVendorPct() {
-  const v = vendorBy(null, $('vendor').value);
-  $('pct').disabled = !v || !!v.own;
-  $('pct').value = v ? String(v.own ? 100 : v.pct) : '';
-}
-function vendorBy(vid, name) {
-  return db.vendors.find(v => (vid && v.id === vid) || v.name === name);
-}
+function locked(s) { return s.sent || !!s.paidBy; }
 function toast(msg) {
   const t = $('toast');
   t.textContent = msg;
   t.classList.add('show');
   clearTimeout(toast.t);
-  toast.t = setTimeout(() => t.classList.remove('show'), 2600);
+  toast.t = setTimeout(() => t.classList.remove('show'), 2800);
+}
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 function csvCell(s) {
   s = String(s ?? '');
@@ -299,23 +381,46 @@ function parseCSV(text) {
   }
   return rows;
 }
+function describe(s) {
+  const qty = s.qty !== 1 ? `${s.qty} × ` : '';
+  const at = s.qty !== 1 ? ` @ ${money(s.price)}` : '';
+  return `${qty}${s.item || (s.qty !== 1 ? 'items' : '—')}${at}`;
+}
 
 /* ---------- vendors ---------- */
 function sortedVendors() {
   return [...db.vendors].sort((a, b) => (b.own - a.own) || a.name.localeCompare(b.name));
 }
-function fillVendorSelect(sel, chosen) {
+function fillVendorSelect(sel, chosen, includeOwn = true) {
   sel.innerHTML = '';
   const ph = document.createElement('option');
   ph.value = ''; ph.textContent = 'Choose the vendor…';
   sel.appendChild(ph);
   for (const v of sortedVendors()) {
+    if (!includeOwn && v.own) continue;
     const o = document.createElement('option');
-    o.value = v.name;
-    o.textContent = v.name;
+    o.value = v.name; o.textContent = v.name;
     sel.appendChild(o);
   }
   sel.value = chosen || '';
+}
+function showVendorPct() {
+  const v = vendorBy(null, $('vendor').value);
+  $('pct').disabled = !v || !!v.own;
+  $('pct').value = v ? String(v.own ? 100 : v.pct) : '';
+  showLineTotal();
+}
+function showLineTotal() {
+  const q = parseNum($('qty').value), p = parseNum($('price').value);
+  $('lineTotal').innerHTML = q > 0 && p > 0 ? `Amount <b>${money(round2(q * p))}</b>` : '&nbsp;';
+}
+// What the business owes a vendor on this phone: carried forward + unpaid sales less commission
+function vendorOwed(v) {
+  const unpaid = db.sales.filter(s => sameVendor(s, v) && !s.paidBy);
+  const total = sum(unpaid, s => s.amount);
+  const comm = sum(unpaid, s => saleComm(s, v));
+  return { unpaid, total, comm, due: round2(total - comm), carried: v.carried || 0,
+           owed: round2((v.carried || 0) + total - comm) };
 }
 
 /* ---------- rendering ---------- */
@@ -332,31 +437,28 @@ function render() {
     if (!byVendor.has(s.vname)) byVendor.set(s.vname, []);
     byVendor.get(s.vname).push(s);
   }
-  const dayTotal = round2(sales.reduce((t, s) => t + s.amount, 0));
   $('daySummary').innerHTML = `<span>${sales.length} sale${sales.length === 1 ? '' : 's'} this day</span>
-    <b>${money(dayTotal)}</b>`;
+    <b>${money(sum(sales, s => s.amount))}</b>`;
 
   const list = $('dayList');
   list.innerHTML = '';
-  if (!sales.length) {
+  if (!sales.length)
     list.innerHTML = '<div class="card empty">No sales written up for this day yet.</div>';
-  }
-  const names = [...byVendor.keys()].sort((a, b) => a.localeCompare(b));
-  for (const name of names) {
+  for (const name of [...byVendor.keys()].sort((a, b) => a.localeCompare(b))) {
     const items = byVendor.get(name);
-    const v = vendorBy(items[0].vid, name) || { own: 0, pct: 0 };
-    const total = round2(items.reduce((t, s) => t + s.amount, 0));
-    const comm = v.own ? total : round2(items.reduce((t, s) => t + saleComm(s, v), 0));
+    const v = vendorBy(items[0].vid, name) || { own: 0, pct: 0, name };
+    const total = sum(items, s => s.amount);
+    const comm = v.own ? total : sum(items, s => saleComm(s, v));
     const pcts = [...new Set(items.map(s => salePct(s, v)))];
-    const lessLabel = pcts.length === 1 ? `Less ${pcts[0]}%` : 'Less commission';
     const card = document.createElement('section');
     card.className = 'card vendor';
-    card.innerHTML = `<h3>${escapeHtml(name)}<span>${items.length} item${items.length === 1 ? '' : 's'}</span></h3>`;
+    card.innerHTML = `<h3>${escapeHtml(name)}<span>${items.length} sale${items.length === 1 ? '' : 's'}</span></h3>`;
     for (const s of items) {
       const line = document.createElement('div');
       line.className = 'line';
       const pctNote = (!v.own && pcts.length > 1) ? ` · ${salePct(s, v)}%` : '';
-      line.innerHTML = `<span class="what">${escapeHtml(s.item || '—')}${pctNote}${s.sent ? '<span class="sent">✓ sent</span>' : ''}</span>
+      const tag = s.paidBy ? '<span class="tag">✓ paid</span>' : (s.sent ? '<span class="tag">✓ sent</span>' : '');
+      line.innerHTML = `<span class="what">${escapeHtml(describe(s))}${pctNote}${tag}</span>
         <span class="amt">${money(s.amount)}</span>`;
       line.onclick = () => openEdit(s.uid);
       card.appendChild(line);
@@ -366,105 +468,262 @@ function render() {
     tot.innerHTML = v.own
       ? `<div class="due"><span>Total (own stock)</span><span>${money(total)}</span></div>`
       : `<div><span>Total</span><span>${money(total)}</span></div>
-         <div><span>${lessLabel}</span><span>${money(comm)}</span></div>
+         <div><span>${pcts.length === 1 ? `Less ${pcts[0]}%` : 'Less commission'}</span><span>${money(comm)}</span></div>
          <div class="due"><span>Due to vendor</span><span>${money(round2(total - comm))}</span></div>`;
     card.appendChild(tot);
+    if (!v.own && v.name) {
+      const f = document.createElement('div');
+      f.className = 'cardfoot';
+      const b = document.createElement('button');
+      b.className = 'btn link'; b.textContent = `Pay ${name}`;
+      b.onclick = () => openPay(name);
+      f.appendChild(b); card.appendChild(f);
+    }
     list.appendChild(card);
   }
 
-  const unsent = db.sales.filter(s => !s.sent).length;
-  $('sendBtn').textContent = unsent ? `Send to BankBooks (${unsent} new)` : 'Nothing new to send';
-  $('sendBtn').disabled = !unsent;
-}
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const unsentPay = db.payments.filter(p => !p.sent).length;
+  $('sendPending').hidden = !unsentPay;
+  $('sendPending').textContent = `Send ${unsentPay} payment${unsentPay === 1 ? '' : 's'} not yet sent`;
 }
 
-/* ---------- add / edit ---------- */
+/* ---------- add / edit sales ---------- */
+function readSale(prefix) {
+  const id = n => prefix ? prefix + n : n.toLowerCase();
+  const q = parseNum($(id('Qty')).value), p = parseNum($(id('Price')).value);
+  return { qty: q, price: p, amount: round2(q * p) };
+}
 function addSale() {
   const vname = $('vendor').value;
-  const amount = parseAmount($('amount').value);
+  const { qty, price, amount } = readSale('');
   if (!vname) { toast('Choose the vendor first'); $('vendor').focus(); return; }
-  if (!(amount > 0)) { toast('Type the amount'); $('amount').focus(); return; }
+  if (!(qty > 0)) { toast('Type the quantity'); $('qty').focus(); return; }
+  if (!(price > 0)) { toast('Type the price'); $('price').focus(); return; }
   const v = vendorBy(null, vname);
-  let pct = v && v.own ? 100 : parsePct($('pct').value);
+  const pct = v && v.own ? 100 : parsePct($('pct').value);
   if (isNaN(pct)) { toast('Commission % must be between 0 and 100'); $('pct').focus(); return; }
   // Her % becomes this vendor's rate from now on (BankBooks follows on import)
   if (v && !v.own && v.pct !== pct) v.pct = pct;
-  db.sales.push({
-    uid: newUid(), date: $('saleDate').value, vid: v ? v.id : 0, vname,
-    item: $('item').value.trim(), amount, pct, sent: false, at: Date.now()
-  });
+  db.sales.push({ uid: newUid(), date: $('saleDate').value, vid: v ? v.id : 0, vname,
+    item: $('item').value.trim(), qty, price, amount, pct, sent: false, at: Date.now() });
   save();
-  $('amount').value = '';
-  $('item').value = '';
-  render();
+  $('price').value = ''; $('item').value = ''; $('qty').value = '1';
+  render(); showLineTotal();
   toast(`${money(amount)} added for ${vname}`);
-  $('amount').focus();   // same vendor, next item
+  $('item').focus();     // same vendor, next item
 }
 function openEdit(uid) {
   const s = db.sales.find(x => x.uid === uid);
   if (!s) return;
   editing = uid;
   fillVendorSelect($('editVendor'), s.vname);
-  $('editAmount').value = s.amount.toFixed(2);
   $('editItem').value = s.item || '';
-  const ev = vendorBy(s.vid, s.vname);
-  $('editPct').value = String(salePct(s, ev));
-  $('editSentNote').hidden = !s.sent;
-  for (const id of ['editVendor', 'editAmount', 'editItem', 'editPct', 'editSave', 'editDelete'])
-    $(id).disabled = !!s.sent;
+  $('editQty').value = String(s.qty);
+  $('editPrice').value = s.price.toFixed(2);
+  $('editPct').value = String(salePct(s, vendorBy(s.vid, s.vname)));
+  const note = s.paidBy ? 'This sale has been paid out and sent to BankBooks. Changes must be made in BankBooks.'
+    : s.sent ? 'This sale was already sent to BankBooks. Changes must be made in BankBooks.' : '';
+  $('editLockNote').textContent = note;
+  $('editLockNote').hidden = !note;
+  for (const id of ['editVendor', 'editItem', 'editQty', 'editPrice', 'editPct', 'editSave', 'editDelete'])
+    $(id).disabled = locked(s);
   $('editDlg').showModal();
 }
 function saveEdit() {
   const s = db.sales.find(x => x.uid === editing);
-  const amount = parseAmount($('editAmount').value);
-  if (!s || s.sent) return $('editDlg').close();
+  if (!s || locked(s)) return $('editDlg').close();
+  const { qty, price, amount } = readSale('edit');
   if (!$('editVendor').value) return toast('Choose the vendor');
-  if (!(amount > 0)) return toast('Type the amount');
+  if (!(qty > 0) || !(price > 0)) return toast('Type the quantity and price');
   const v = vendorBy(null, $('editVendor').value);
   const pct = v && v.own ? 100 : parsePct($('editPct').value);
   if (isNaN(pct)) return toast('Commission % must be between 0 and 100');
-  s.vname = $('editVendor').value; s.vid = v ? v.id : 0;
-  s.amount = amount; s.item = $('editItem').value.trim(); s.pct = pct;
+  Object.assign(s, { vname: $('editVendor').value, vid: v ? v.id : 0, item: $('editItem').value.trim(),
+    qty, price, amount, pct });
   save(); $('editDlg').close(); render();
 }
 function deleteEdit() {
   const s = db.sales.find(x => x.uid === editing);
-  if (!s || s.sent) return;
+  if (!s || locked(s)) return;
   if (!confirm(`Delete ${money(s.amount)} for ${s.vname}?`)) return;
   db.sales = db.sales.filter(x => x.uid !== editing);
   save(); $('editDlg').close(); render();
 }
 
-/* ---------- sending ---------- */
-function buildCSV(sales) {
-  const lines = ['uid,date,vendor_id,vendor,item,amount,commission_pct'];
-  for (const s of sales) {
-    const v = vendorBy(s.vid, s.vname);
-    lines.push([s.uid, s.date, s.vid || '', s.vname, s.item || '', s.amount.toFixed(2),
-      String(salePct(s, v))].map(csvCell).join(','));
-  }
-  return lines.join('\r\n') + '\r\n';
+/* ---------- pay a vendor ---------- */
+function openPay(name) {
+  fillVendorSelect($('payVendor'), name || '', false);
+  $('dedList').innerHTML = '';
+  $('payDate').value = todayISO();
+  setMethod('EFT');
+  payTouched = false;
+  $('payAmount').value = '';
+  refreshPay();
+  $('payDlg').showModal();
 }
-async function send(sales) {
-  if (!sales.length) return toast('Nothing to send');
-  const stamp = new Date();
-  const p = n => String(n).padStart(2, '0');
-  const biz = (db.settings.business || 'Sales').replace(/[^\w-]+/g, '-');
-  const name = `${biz}-sales-${stamp.getFullYear()}-${p(stamp.getMonth() + 1)}-${p(stamp.getDate())}-${p(stamp.getHours())}${p(stamp.getMinutes())}.csv`;
-  const file = new File([buildCSV(sales)], name, { type: 'text/csv' });
-  const uids = sales.map(s => s.uid);
-  const total = round2(sales.reduce((t, s) => t + s.amount, 0));
+function setMethod(m) {
+  for (const b of $('payMethod').children) b.classList.toggle('on', b.dataset.m === m);
+}
+function payMethod() { return $('payMethod').querySelector('.on').dataset.m; }
+function addDedRow(what = '', amount = '') {
+  const row = document.createElement('div');
+  row.className = 'ded';
+  row.innerHTML = `<input type="text" list="dedTypes" placeholder="What for" value="${escapeHtml(what)}">
+    <input type="text" inputmode="decimal" placeholder="R" value="${escapeHtml(amount)}">
+    <button type="button" aria-label="Remove">×</button>`;
+  row.querySelector('button').onclick = () => { row.remove(); refreshPay(); };
+  row.querySelectorAll('input').forEach(i => i.oninput = refreshPay);
+  $('dedList').appendChild(row);
+  return row;
+}
+function readDeds() {
+  return [...$('dedList').children].map(r => {
+    const [w, a] = r.querySelectorAll('input');
+    return { what: w.value.trim().replace(/\s+/g, ' '), amount: parseNum(a.value) };
+  }).filter(d => d.what || !isNaN(d.amount));
+}
+function refreshPay() {
+  $('dedTypes').innerHTML = db.settings.dedTypes.map(t => `<option value="${escapeHtml(t)}">`).join('');
+  const v = vendorBy(null, $('payVendor').value);
+  if (!v) {
+    $('paySummary').innerHTML = '<div>Choose who is being paid.</div>';
+    $('payAfter').innerHTML = '';
+    $('paySave').disabled = true;
+    return;
+  }
+  const o = vendorOwed(v);
+  const dates = o.unpaid.map(s => s.date).sort();
+  const span = dates.length ? ` (${niceDate(dates[0])}${dates.length > 1 && dates[0] !== dates[dates.length - 1] ? ' – ' + niceDate(dates[dates.length - 1]) : ''})` : '';
+  $('paySummary').innerHTML =
+    `<div><span>Unpaid sales: ${o.unpaid.length}${span}</span><span>${money(o.total)}</span></div>
+     <div><span>Less commission</span><span>${money(o.comm)}</span></div>
+     ${o.carried ? `<div><span>Carried from last payment</span><span>${money(o.carried)}</span></div>` : ''}
+     <div class="due"><span>Owed to ${escapeHtml(v.name)}</span><span>${money(o.owed)}</span></div>`;
+  const deds = readDeds();
+  const dedTotal = sum(deds.filter(d => d.amount > 0), d => d.amount);
+  if (!payTouched) $('payAmount').value = Math.max(0, round2(o.owed - dedTotal)).toFixed(2);
+  const paid = parseNum($('payAmount').value);
+  const left = round2(o.owed - dedTotal - (isNaN(paid) ? 0 : paid));
+  $('payAfter').innerHTML =
+    `${dedTotal ? `<div><span>Deductions</span><span>${money(dedTotal)}</span></div>` : ''}
+     <div class="due"><span>${left < 0 ? 'Overpaid (carried forward)' : 'Still owed after this'}</span><span>${money(Math.abs(left))}</span></div>`;
+  $('paySave').disabled = false;
+}
+async function savePay() {
+  const v = vendorBy(null, $('payVendor').value);
+  if (!v) return toast('Choose the vendor');
+  const deds = readDeds();
+  for (const d of deds) {
+    if (!d.what) return toast('Say what each deduction is for');
+    if (!(d.amount > 0)) return toast(`Type the amount for ${d.what}`);
+  }
+  const amount = parseNum($('payAmount').value);
+  if (isNaN(amount) || amount < 0) return toast('Type the amount paid');
+  if (!$('payDate').value) return toast('Choose the date paid');
+  const o = vendorOwed(v);
+  if (amount === 0 && !deds.length) return toast('Nothing paid or deducted');
+  const dedTotal = sum(deds, d => d.amount);
+  const p = {
+    uid: newUid(), date: $('payDate').value, vid: v.id, vname: v.name, method: payMethod(),
+    amount, deductions: deds.map(d => ({ uid: newUid(), what: d.what, amount: d.amount })),
+    sales: o.unpaid.map(s => s.uid), owed: o.owed, carriedBefore: o.carried,
+    carriedAfter: round2(o.owed - dedTotal - amount), sent: false, at: Date.now()
+  };
+  db.payments.push(p);
+  for (const s of o.unpaid) s.paidBy = p.uid;
+  v.carried = p.carriedAfter;
+  for (const d of deds)   // remember what she deducts for
+    if (!db.settings.dedTypes.some(t => t.toLowerCase() === d.what.toLowerCase())) db.settings.dedTypes.push(d.what);
+  save();
+  $('payDlg').close();
+  render();
+  await sendPayments([p]);
+}
 
+/* ---------- payments list ---------- */
+function openPayments() {
+  const list = $('plist');
+  const ps = [...db.payments].sort((a, b) => b.at - a.at).slice(0, 40);
+  list.innerHTML = ps.length ? '' : '<p>No payments yet.</p>';
+  for (const p of ps) {
+    const ded = sum(p.deductions, d => d.amount);
+    const row = document.createElement('div');
+    row.className = 'line';
+    row.innerHTML = `<span class="what">${niceDate(p.date)} · ${escapeHtml(p.vname)} · ${p.method}
+      ${ded ? ` · less ${money(ded)}` : ''}${p.sent ? '<span class="tag">✓ sent</span>' : ' <span class="warn">not sent</span>'}</span>
+      <span class="amt">${money(p.amount)}</span>`;
+    if (!p.sent && isLastPayment(p)) {
+      const b = document.createElement('button');
+      b.className = 'btn link'; b.textContent = 'Undo';
+      b.onclick = () => undoPayment(p);
+      row.appendChild(b);
+    }
+    list.appendChild(row);
+  }
+  $('menuDlg').close();
+  $('plistDlg').showModal();
+}
+function isLastPayment(p) {
+  return !db.payments.some(x => x.vname === p.vname && x.at > p.at);
+}
+function undoPayment(p) {
+  if (!confirm(`Undo the payment of ${money(p.amount)} to ${p.vname}? Its sales become unpaid again.`)) return;
+  for (const s of db.sales) if (s.paidBy === p.uid) delete s.paidBy;
+  const v = vendorBy(p.vid, p.vname);
+  if (v) v.carried = p.carriedBefore || 0;
+  db.payments = db.payments.filter(x => x.uid !== p.uid);
+  save(); render(); openPayments();
+}
+
+/* ---------- sending ---------- */
+const HEAD = 'type,uid,date,vendor_id,vendor,item,qty,price,amount,commission_pct,method,payment_uid';
+function saleRow(s) {
+  const v = vendorBy(s.vid, s.vname);
+  return ['sale', s.uid, s.date, s.vid || '', s.vname, s.item || '', s.qty, s.price.toFixed(2),
+    s.amount.toFixed(2), salePct(s, v), '', s.paidBy || ''];
+}
+function paymentRows(p) {
+  const rows = [];
+  for (const d of p.deductions)
+    rows.push(['deduction', d.uid, p.date, p.vid || '', p.vname, d.what, '', '', d.amount.toFixed(2), '', '', p.uid]);
+  rows.push(['payment', p.uid, p.date, p.vid || '', p.vname, '', '', '', p.amount.toFixed(2), '', p.method, p.uid]);
+  return rows;
+}
+function buildCSV(rows) {
+  return [HEAD, ...rows.map(r => r.map(csvCell).join(','))].join('\r\n') + '\r\n';
+}
+function fileName(kind) {
+  const t = new Date(); const p = n => String(n).padStart(2, '0');
+  const biz = (db.settings.business || 'Sales').replace(/[^\w-]+/g, '-');
+  return `${biz}-${kind}-${t.getFullYear()}-${p(t.getMonth() + 1)}-${p(t.getDate())}-${p(t.getHours())}${p(t.getMinutes())}.csv`;
+}
+// Send these payments with their sales and deductions
+function sendPayments(payments) {
+  const rows = [];
+  const saleUids = new Set(payments.flatMap(p => p.sales));
+  for (const s of db.sales) if (saleUids.has(s.uid)) rows.push(saleRow(s));
+  for (const p of payments) rows.push(...paymentRows(p));
+  const total = sum(payments, p => p.amount);
+  const who = payments.length === 1 ? payments[0].vname : `${payments.length} vendors`;
+  return shareFile(rows, fileName('payment'), `Payment: ${who}, ${money(total)}`,
+    { sales: [...saleUids], payments: payments.map(p => p.uid) });
+}
+function sendSales(sales, label) {
+  return shareFile(sales.map(saleRow), fileName('sales'),
+    `${label}: ${sales.length} sale(s), ${money(sum(sales, s => s.amount))}`,
+    { sales: sales.map(s => s.uid), payments: [] });
+}
+async function shareFile(rows, name, text, marks) {
+  if (!rows.length) return toast('Nothing to send');
+  const file = new File([buildCSV(rows)], name, { type: 'text/csv' });
   if (navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
-      await navigator.share({ files: [file], title: name,
-        text: `${sales.length} sale(s), ${money(total)}, for BankBooks` });
-      markSent(uids);
-      toast(`${sales.length} sale(s) sent`);
+      await navigator.share({ files: [file], title: name, text: text + ' - for BankBooks' });
+      markSent(marks);
+      toast('Sent');
     } catch (e) {
       if (e.name !== 'AbortError') alert('Could not share the file: ' + e.message);
+      else toast('Not sent - use "Send … not yet sent" to try again');
     }
     return;
   }
@@ -474,14 +733,15 @@ async function send(sales) {
   a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  pendingSend = uids;
-  $('sentText').textContent = `The file ${name} (${sales.length} sale(s), ${money(total)}) was saved ` +
-    'to Downloads. Once it has gone to BankBooks, mark these sales as sent.';
+  pendingSend = marks;
+  $('sentText').textContent = `${text}. The file ${name} was saved to Downloads. ` +
+    'Once it has gone to BankBooks, mark it as sent.';
   $('sentDlg').showModal();
 }
-function markSent(uids) {
-  const set = new Set(uids);
-  for (const s of db.sales) if (set.has(s.uid)) s.sent = true;
+function markSent(marks) {
+  const s = new Set(marks.sales), p = new Set(marks.payments);
+  for (const x of db.sales) if (s.has(x.uid)) x.sent = true;
+  for (const x of db.payments) if (p.has(x.uid)) x.sent = true;
   save(); render();
 }
 
@@ -491,81 +751,36 @@ async function loadVendorFile(file) {
   const head = (rows.shift() || []).map(h => h.toLowerCase());
   const iId = head.indexOf('vendor_id'), iName = head.indexOf('vendor'),
         iOwn = head.indexOf('own_stock'), iPct = head.indexOf('commission_pct');
-  if (iName < 0 || iId < 0) return alert('That is not a vendor list from BankBooks ' +
-    '(made with Vendor Sales > Send Vendor List to Phone).');
+  if (iName < 0 || iId < 0 || head.includes('type'))
+    return alert('That is not a vendor list from BankBooks (made with Vendor Sales > Send Vendor List to Phone).');
   const fromFile = rows.filter(r => r[iName]).map(r => ({
-    id: Number(r[iId]) || 0, name: r[iName], own: Number(r[iOwn]) ? 1 : 0,
-    pct: Number(r[iPct]) || 0 }));
-  // keep vendors added on the phone that BankBooks doesn't know yet
+    id: Number(r[iId]) || 0, name: r[iName], own: Number(r[iOwn]) ? 1 : 0, pct: Number(r[iPct]) || 0, carried: 0 }));
   for (const v of fromFile) {
     const old = db.vendors.find(x => x.name.toLowerCase() === v.name.toLowerCase());
-    if (old && !v.own && db.sales.some(s => !s.sent && s.vname.toLowerCase() === v.name.toLowerCase()))
-      v.pct = old.pct;   // her newer rate hasn't reached BankBooks yet
+    if (!old) continue;
+    v.carried = old.carried || 0;   // what's carried forward lives on the phone
+    if (!v.own && db.sales.some(s => !s.sent && !s.paidBy && sameVendor(s, v)))
+      v.pct = old.pct;              // her newer rate hasn't reached BankBooks yet
   }
   const known = new Set(fromFile.map(v => v.name.toLowerCase()));
   const extra = db.vendors.filter(v => !v.id && !v.own && !known.has(v.name.toLowerCase()));
   db.vendors = fromFile.concat(extra);
-  if (!db.vendors.some(v => v.own)) db.vendors.unshift({ id: 0, name: 'Own Stock', own: 1, pct: 100 });
-  // unsent sales pick up the BankBooks id
-  for (const s of db.sales) if (!s.sent) {
-    const v = db.vendors.find(x => x.name.toLowerCase() === s.vname.toLowerCase());
+  if (!db.vendors.some(v => v.own)) db.vendors.unshift({ id: 0, name: 'Own Stock', own: 1, pct: 100, carried: 0 });
+  for (const s of db.sales) {       // pick up the BankBooks id
+    const v = db.vendors.find(x => sameVendor(s, x));
     if (v) { s.vid = v.id; s.vname = v.name; }
+  }
+  for (const p of db.payments) {
+    const v = db.vendors.find(x => x.name.toLowerCase() === p.vname.toLowerCase());
+    if (v) { p.vid = v.id; p.vname = v.name; }
   }
   save();
   fillVendorSelect($('vendor'), $('vendor').value);
   showVendorPct();
   render();
-  $('menuDlg').close();
+  if ($('menuDlg').open) $('menuDlg').close();
   toast(`${fromFile.length} vendors loaded`);
 }
-
-/* ---------- wiring ---------- */
-$('saleDate').value = todayISO();
-$('saleDate').onchange = () => { if (!$('saleDate').value) $('saleDate').value = todayISO(); render(); };
-$('prevDay').onclick = () => { $('saleDate').value = shiftDate($('saleDate').value, -1); render(); };
-$('nextDay').onclick = () => { $('saleDate').value = shiftDate($('saleDate').value, 1); render(); };
-$('addBtn').onclick = addSale;
-$('amount').addEventListener('keydown', e => { if (e.key === 'Enter') addSale(); });
-$('item').addEventListener('keydown', e => { if (e.key === 'Enter') addSale(); });
-$('vendor').onchange = () => { showVendorPct(); if ($('vendor').value) $('amount').focus(); };
-$('pct').addEventListener('keydown', e => { if (e.key === 'Enter') addSale(); });
-
-$('editSave').onclick = saveEdit;
-$('editDelete').onclick = deleteEdit;
-$('editCancel').onclick = () => $('editDlg').close();
-
-$('sendBtn').onclick = () => send(db.sales.filter(s => !s.sent));
-$('sentYes').onclick = () => { if (pendingSend) markSent(pendingSend); pendingSend = null; $('sentDlg').close(); };
-$('sentNo').onclick = () => { pendingSend = null; $('sentDlg').close(); };
-
-$('menuBtn').onclick = () => {
-  const n = db.sales.length, unsent = db.sales.filter(s => !s.sent).length;
-  $('mInfo').textContent = `${db.vendors.length} vendors · ${n} sales on this phone (${unsent} not sent yet).`;
-  $('menuDlg').showModal();
-};
-$('mClose').onclick = () => $('menuDlg').close();
-$('mLoadVendors').onclick = () => $('vendorFile').click();
-$('vendorFile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) loadVendorFile(f); };
-$('mAddVendor').onclick = () => { $('menuDlg').close(); $('newVendName').value = ''; $('newVendPct').value = '10'; $('vendDlg').showModal(); };
-$('vendCancel').onclick = () => $('vendDlg').close();
-$('vendSave').onclick = () => {
-  const name = $('newVendName').value.trim().replace(/\s+/g, ' ');
-  const pct = parseAmount($('newVendPct').value);
-  if (!name) return toast('Type the vendor name');
-  if (db.vendors.some(v => v.name.toLowerCase() === name.toLowerCase())) return toast('That vendor is already there');
-  db.vendors.push({ id: 0, name, own: 0, pct: isNaN(pct) ? 10 : pct });
-  save(); fillVendorSelect($('vendor'), name); showVendorPct(); $('vendDlg').close(); render();
-  toast(`${name} added`);
-};
-$('mResend').onclick = () => {
-  $('menuDlg').close();
-  if (confirm('Send every sale on this phone again? BankBooks skips the ones it already has.'))
-    send(db.sales);
-};
-$('mBusiness').onclick = () => {
-  const b = prompt('Business name (shown at the top and in the file name):', db.settings.business || '');
-  if (b !== null) { db.settings.business = b.trim(); save(); render(); }
-};
 
 /* A file shared to the app from WhatsApp, email etc. (see sw.js) */
 async function takeSharedFile() {
@@ -580,6 +795,81 @@ async function takeSharedFile() {
     await loadVendorFile(new File([await r.blob()], name));
   } catch (e) { alert('Could not read the shared file: ' + e.message); }
 }
+
+/* ---------- wiring ---------- */
+$('saleDate').value = todayISO();
+$('saleDate').onchange = () => { if (!$('saleDate').value) $('saleDate').value = todayISO(); render(); };
+$('prevDay').onclick = () => { $('saleDate').value = shiftDate($('saleDate').value, -1); render(); };
+$('nextDay').onclick = () => { $('saleDate').value = shiftDate($('saleDate').value, 1); render(); };
+$('addBtn').onclick = addSale;
+for (const id of ['item', 'qty', 'price', 'pct'])
+  $(id).addEventListener('keydown', e => { if (e.key === 'Enter') addSale(); });
+$('qty').oninput = showLineTotal;
+$('price').oninput = showLineTotal;
+$('vendor').onchange = () => { showVendorPct(); if ($('vendor').value) $('item').focus(); };
+
+$('editSave').onclick = saveEdit;
+$('editDelete').onclick = deleteEdit;
+$('editCancel').onclick = () => $('editDlg').close();
+
+$('payBtn').onclick = () => openPay($('vendor').value && !vendorBy(null, $('vendor').value)?.own ? $('vendor').value : '');
+$('payVendor').onchange = () => { payTouched = false; refreshPay(); };
+$('payAmount').oninput = () => { payTouched = true; refreshPay(); };
+$('addDed').onclick = () => {
+  const r = addDedRow(db.settings.dedTypes[0] || 'Stall Hire');
+  refreshPay();
+  r.querySelectorAll('input')[1].focus();
+};
+for (const b of $('payMethod').children) b.onclick = () => setMethod(b.dataset.m);
+$('payCancel').onclick = () => $('payDlg').close();
+$('paySave').onclick = savePay;
+
+$('sendPending').onclick = () => sendPayments(db.payments.filter(p => !p.sent));
+$('sentYes').onclick = () => { if (pendingSend) markSent(pendingSend); pendingSend = null; $('sentDlg').close(); };
+$('sentNo').onclick = () => { pendingSend = null; $('sentDlg').close(); };
+
+$('menuBtn').onclick = () => {
+  const unpaid = db.sales.filter(s => !s.paidBy && !(vendorBy(s.vid, s.vname) || {}).own).length;
+  const unsent = db.sales.filter(s => !s.sent).length;
+  $('mInfo').textContent = `${db.vendors.length} vendors · ${db.sales.length} sales on this phone ` +
+    `(${unpaid} not paid out, ${unsent} not sent) · ${db.payments.length} payments.`;
+  $('menuDlg').showModal();
+};
+$('mClose').onclick = () => $('menuDlg').close();
+$('mPayments').onclick = openPayments;
+$('plistClose').onclick = () => $('plistDlg').close();
+$('mMonthEnd').onclick = () => {
+  $('menuDlg').close();
+  const sales = db.sales.filter(s => !s.sent);
+  if (!sales.length) return toast('All sales have been sent');
+  if (confirm(`Send all ${sales.length} sale(s) not yet sent, paid or not, so BankBooks has the month's sales?`))
+    sendSales(sales, 'Month end');
+};
+$('mLoadVendors').onclick = () => $('vendorFile').click();
+$('vendorFile').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) loadVendorFile(f); };
+$('mAddVendor').onclick = () => { $('menuDlg').close(); $('newVendName').value = ''; $('newVendPct').value = '10'; $('vendDlg').showModal(); };
+$('vendCancel').onclick = () => $('vendDlg').close();
+$('vendSave').onclick = () => {
+  const name = $('newVendName').value.trim().replace(/\s+/g, ' ');
+  const pct = parsePct($('newVendPct').value);
+  if (!name) return toast('Type the vendor name');
+  if (db.vendors.some(v => v.name.toLowerCase() === name.toLowerCase())) return toast('That vendor is already there');
+  db.vendors.push({ id: 0, name, own: 0, pct: isNaN(pct) ? 10 : pct, carried: 0 });
+  save(); fillVendorSelect($('vendor'), name); showVendorPct(); $('vendDlg').close(); render();
+  toast(`${name} added`);
+};
+$('mResend').onclick = () => {
+  $('menuDlg').close();
+  if (!confirm('Send every sale and payment on this phone again? BankBooks skips what it already has.')) return;
+  const rows = db.sales.map(saleRow);
+  for (const p of db.payments) rows.push(...paymentRows(p));
+  shareFile(rows, fileName('everything'), 'Everything on the phone',
+    { sales: db.sales.map(s => s.uid), payments: db.payments.map(p => p.uid) });
+};
+$('mBusiness').onclick = () => {
+  const b = prompt('Business name (shown at the top and in the file name):', db.settings.business || '');
+  if (b !== null) { db.settings.business = b.trim(); save(); render(); }
+};
 
 fillVendorSelect($('vendor'));
 showVendorPct();
