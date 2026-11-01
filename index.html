@@ -1068,7 +1068,9 @@ async function loadVendorFile(file) {
   const iId = head.indexOf('vendor_id'), iName = head.indexOf('vendor'),
         iOwn = head.indexOf('own_stock'), iPct = head.indexOf('commission_pct'),
         iBiz = head.indexOf('business'), iShort = head.indexOf('short_name'),
-        iBal = head.indexOf('balance'), iBalDate = head.indexOf('balance_date');
+        iBal = head.indexOf('balance'), iBalDate = head.indexOf('balance_date'),
+        iSaleUids = head.indexOf('sale_uids'), iPayUids = head.indexOf('payment_uids');
+  const uidSet = (r, i) => i >= 0 ? new Set((r[i] || '').split(/\s+/).filter(Boolean)) : null;
   if (iName < 0 || iId < 0 || head.includes('type'))
     return alert('That is not a vendor list from BankBooks (made with Vendor Sales > Send Vendor List to Phone).');
   // The business name comes from BankBooks with the list
@@ -1078,26 +1080,35 @@ async function loadVendorFile(file) {
   if (iShort >= 0) db.settings.short = short || '';
   const fromFile = rows.filter(r => r[iName]).map(r => ({
     id: Number(r[iId]) || 0, name: r[iName], own: Number(r[iOwn]) ? 1 : 0, pct: Number(r[iPct]) || 0, carried: 0,
-    bb: iBal >= 0 && r[iBal] !== '' && isFinite(Number(r[iBal])) ? Number(r[iBal]) : null }));
+    bb: iBal >= 0 && r[iBal] !== '' && isFinite(Number(r[iBal])) ? Number(r[iBal]) : null,
+    // The phone sales and payments BankBooks already has (newer lists)
+    bbSales: uidSet(r, iSaleUids), bbPays: uidSet(r, iPayUids) }));
   // Balances: what BankBooks says is owed, less the sales it already has that
   // are still unpaid on the phone (they show here as sales, not as carried).
-  // A vendor with a payment not yet sent keeps the phone's figure.
+  // Sales sent but not yet imported into BankBooks are not in its balance, so
+  // they are not taken off. A vendor with a payment that BankBooks does not
+  // have yet (not sent, or sent but not imported) keeps the phone's figure.
   const resynced = [], kept = [];
   for (const v of fromFile) {
     const old = db.vendors.find(x => x.name.toLowerCase() === v.name.toLowerCase());
     if (v.bb !== null && !v.own) {
-      if (db.payments.some(p => !p.sent && p.vname.toLowerCase() === v.name.toLowerCase())) {
+      // Sent in the last 30 days and not in BankBooks: probably not imported yet
+      // (older ones were imported, or deleted there on purpose)
+      const notInBooks = p => !p.sent ||
+        (v.bbPays && !v.bbPays.has(p.uid) && Date.now() - (p.at || 0) < 30 * 864e5);
+      if (db.payments.some(p => p.vname.toLowerCase() === v.name.toLowerCase() && notInBooks(p))) {
         v.carried = old ? old.carried || 0 : 0;
         kept.push(v.name);
       } else {
-        const inBooks = db.sales.filter(s => sameVendor(s, v) && !s.paidBy && s.sent);
+        const inBooks = db.sales.filter(s => sameVendor(s, v) && !s.paidBy &&
+          (v.bbSales ? v.bbSales.has(s.uid) : s.sent));
         const before = old ? vendorOwed(old).owed : 0;
         v.carried = round2(v.bb - sum(inBooks, s => s.amount - saleComm(s, v)));
         if (Math.abs(before - round2(v.carried + vendorOwed({ ...v, carried: 0 }).due)) > 0.004)
           resynced.push(v.name);
       }
     }
-    delete v.bb;
+    delete v.bb; delete v.bbSales; delete v.bbPays;
     if (!old) continue;
     if (iBal < 0) v.carried = old.carried || 0;   // older list: keep the phone's figure
     if (!v.own && db.sales.some(s => !s.sent && !s.paidBy && sameVendor(s, v)))
@@ -1125,8 +1136,8 @@ async function loadVendorFile(file) {
     const asAt = iBalDate >= 0 && rows[0] ? rows[0][iBalDate] : '';
     let msg = `Balances brought in line with BankBooks${asAt ? ' (as at ' + longDate(asAt) + ')' : ''}.`;
     msg += resynced.length ? `\n\nChanged: ${resynced.join(', ')}.` : '\n\nNo vendor\'s balance changed.';
-    if (kept.length) msg += `\n\nNot changed (a payment here has not been sent yet - send it, ` +
-      `then load the list again once it is in BankBooks): ${kept.join(', ')}.`;
+    if (kept.length) msg += `\n\nNot changed (a payment here is not in BankBooks yet - send it, ` +
+      `import it in BankBooks, then load the list again): ${kept.join(', ')}.`;
     alert(msg);
   }
 }
