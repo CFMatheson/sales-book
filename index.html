@@ -261,9 +261,19 @@
   <button class="btn secondary" id="mAddVendor">Add a Vendor</button>
   <button class="btn secondary" id="mResend">Send Everything Again</button>
   <button class="btn secondary" id="mBusiness">Business Name</button>
+  <button class="btn secondary" id="mAbout">About</button>
   <p class="hint" id="mInfo"></p>
   <button class="btn" id="mClose">Close</button>
   <input type="file" id="vendorFile" accept=".csv,text/csv,text/plain,text/comma-separated-values" hidden>
+</dialog>
+
+<!-- About -->
+<dialog id="aboutDlg">
+  <h2>Sales Book</h2>
+  <p id="aboutText"></p>
+  <p class="hint">Sales and payments are kept on this phone until they are sent to BankBooks.
+    Send at the end of every market day, and never clear Chrome's data for this app.</p>
+  <button class="btn" id="aboutClose">Close</button>
 </dialog>
 
 <!-- Add vendor -->
@@ -303,6 +313,8 @@
    type is sale, deduction or payment. Every row has a unique uid, so BankBooks
    never imports anything twice. Everything stays on this phone until sent. */
 
+// Shown in Menu > About. Keep it the same as VERSION in sw.js.
+const APP_VERSION = 'salesbook-13';
 const KEY = 'salesbook.v1';
 const $ = id => document.getElementById(id);
 
@@ -1200,6 +1212,17 @@ $('menuBtn').onclick = () => {
   $('menuDlg').showModal();
 };
 $('mClose').onclick = () => $('menuDlg').close();
+$('mAbout').onclick = () => {
+  const unsent = db.sales.filter(s => !s.sent).length + db.payments.filter(p => !p.sent).length;
+  $('aboutText').innerHTML =
+    `Version ${APP_VERSION.replace('salesbook-', '')} (${APP_VERSION})<br>` +
+    `For ${escapeHtml(db.settings.business || 'the business')}, with BankBooks<br>` +
+    `${db.vendors.length} vendors · ${db.sales.length} sales · ${db.payments.length} payments` +
+    `<br>${unsent ? unsent + ' not sent yet' : 'Everything has been sent'}`;
+  $('menuDlg').close();
+  $('aboutDlg').showModal();
+};
+$('aboutClose').onclick = () => $('aboutDlg').close();
 $('mPayments').onclick = openPayments;
 $('plistClose').onclick = () => $('plistDlg').close();
 $('mLoadVendors').onclick = () => $('vendorFile').click();
