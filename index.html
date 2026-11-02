@@ -166,7 +166,8 @@
     <label for="vendor">Vendor</label>
     <select id="vendor"></select>
     <label for="item">Item (optional)</label>
-    <input id="item" type="text" autocomplete="off" placeholder="e.g. Bunny">
+    <input id="item" type="text" autocomplete="off" placeholder="e.g. Bunny" list="itemList">
+    <datalist id="itemList"></datalist>
     <div class="row">
       <div>
         <label for="qty">Qty</label>
@@ -351,7 +352,7 @@
    never imports anything twice. Everything stays on this phone until sent. */
 
 // Shown in Menu > About. Keep it the same as VERSION in sw.js.
-const APP_VERSION = 'salesbook-16';
+const APP_VERSION = 'salesbook-17';
 const KEY = 'salesbook.v1';
 const $ = id => document.getElementById(id);
 
@@ -369,6 +370,15 @@ function load() {
   d.payments = d.payments || [];
   d.settings = d.settings || {};
   d.settings.dedTypes = d.settings.dedTypes || ['Stall Hire'];
+  // Items typed before, per vendor, for suggestions (kept apart from the
+  // sales so they can be tidied later): { 'vendor name': { 'Item': uses } }
+  if (!d.items) {
+    d.items = {};
+    for (const s of d.sales) if (s.item) {
+      const k = s.vname.toLowerCase(), m = d.items[k] || (d.items[k] = {});
+      m[s.item] = (m[s.item] || 0) + 1;
+    }
+  }
   for (const s of d.sales) {               // older sales had only an amount
     if (typeof s.qty !== 'number') s.qty = 1;
     if (typeof s.price !== 'number') s.price = s.amount;
@@ -482,11 +492,28 @@ function fillVendorSelect(sel, chosen, includeOwn = true) {
   }
   sel.value = chosen || '';
 }
+/* ---------- item suggestions ---------- */
+function rememberItem(vname, item) {
+  item = (item || '').trim();
+  if (!item) return;
+  const k = vname.toLowerCase(), m = db.items[k] || (db.items[k] = {});
+  // Same words in another case count as the same item (keep the first spelling)
+  const same = Object.keys(m).find(x => x.toLowerCase() === item.toLowerCase());
+  m[same || item] = (m[same || item] || 0) + 1;
+}
+// The chosen vendor's items, most used first
+function fillItemList() {
+  const m = db.items[($('vendor').value || '').toLowerCase()] || {};
+  $('itemList').innerHTML = Object.keys(m).sort((a, b) => m[b] - m[a] || a.localeCompare(b))
+    .slice(0, 60).map(x => `<option value="${escapeHtml(x)}"></option>`).join('');
+}
+
 function showVendorPct() {
   const v = vendorBy(null, $('vendor').value);
   $('pct').disabled = !v || !!v.own;
   $('pct').value = v ? String(v.own ? 100 : v.pct) : '';
   showLineTotal();
+  fillItemList();      // this vendor's items as suggestions
 }
 function showLineTotal() {
   const q = parseNum($('qty').value), p = parseNum($('price').value);
@@ -643,7 +670,7 @@ function addSale() {
     item: $('item').value.trim(), qty, price, amount, pct });
   save();
   $('price').value = ''; $('item').value = ''; $('qty').value = '1';
-  renderBasket(); showLineTotal();
+  renderBasket(); showLineTotal(); fillItemList();
   toast(`${money(amount)} added for ${vname}`);
   $('item').focus();     // same vendor, next item
 }
@@ -706,6 +733,7 @@ function checkoutDone() {
   db.settings.custNo = (db.settings.custNo || 0) + 1;
   for (const l of lines) {
     db.sales.push({ ...l, payType, sent: false, at: Date.now(), cust: db.settings.custNo });
+    rememberItem(l.vname, l.item);
     expanded.add(l.vname);
   }
   db.settings.lastPayType = payType;   // the next checkout starts on it
