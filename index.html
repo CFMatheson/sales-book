@@ -137,6 +137,10 @@
   .ded button { flex: 0 0 44px; height: 44px; border-radius: 10px; border: 1.5px solid var(--accent);
     background: transparent; color: var(--accent); font-size: 20px; }
   .plist .line { cursor: default; }
+  .ilist .line { cursor: default; align-items: center; padding: 6px 4px 6px 12px; }
+  .ilist .line .what { color: var(--ink); flex: 1; }
+  .ilist .line .uses { color: var(--muted); font-size: 14px; white-space: nowrap; }
+  .ilist { max-height: 50vh; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; margin-top: 10px; }
   .toast { position: fixed; left: 50%; bottom: 140px; transform: translateX(-50%); background: var(--ink);
     color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 15px; opacity: 0;
     transition: opacity .2s; pointer-events: none; max-width: 90vw; text-align: center; z-index: 20; }
@@ -267,6 +271,17 @@
   <p class="hint">Send the remittance to the vendor, make the payment, then tap Paid &amp; Send.</p>
 </dialog>
 
+<!-- Tidy the item suggestions -->
+<dialog id="itemsDlg">
+  <h2>Item Suggestions</h2>
+  <p>The items suggested as you type, per vendor. Fix a spelling with Rename (two spellings of the same item become one), or tap &#10005; to remove one. Sales already written up are not changed.</p>
+  <label for="itemsVendor">Vendor</label>
+  <select id="itemsVendor"></select>
+  <div class="ilist" id="ilist"></div>
+  <button class="btn secondary" id="itemsOnce">Remove Items Used Only Once</button>
+  <button class="btn" id="itemsClose">Close</button>
+</dialog>
+
 <!-- Payments -->
 <dialog id="plistDlg">
   <h2>Payments</h2>
@@ -281,6 +296,7 @@
   <button class="btn secondary" id="mLoadVendors">Load Vendor List</button>
   <button class="btn secondary" id="mAddVendor">Add a Vendor</button>
   <button class="btn secondary" id="mResend">Send Everything Again</button>
+  <button class="btn secondary" id="mItems">Item Suggestions</button>
   <button class="btn secondary" id="mBusiness">Business Name</button>
   <button class="btn secondary" id="mAbout">About</button>
   <p class="hint" id="mInfo"></p>
@@ -352,7 +368,7 @@
    never imports anything twice. Everything stays on this phone until sent. */
 
 // Shown in Menu > About. Keep it the same as VERSION in sw.js.
-const APP_VERSION = 'salesbook-17';
+const APP_VERSION = 'salesbook-18';
 const KEY = 'salesbook.v1';
 const $ = id => document.getElementById(id);
 
@@ -506,6 +522,55 @@ function fillItemList() {
   const m = db.items[($('vendor').value || '').toLowerCase()] || {};
   $('itemList').innerHTML = Object.keys(m).sort((a, b) => m[b] - m[a] || a.localeCompare(b))
     .slice(0, 60).map(x => `<option value="${escapeHtml(x)}"></option>`).join('');
+}
+
+/* ---------- tidying the suggestions (Menu > Item Suggestions) ---------- */
+// Vendors that have suggestions; a vendor no longer on the list shows by its key
+function itemVendors() {
+  return Object.keys(db.items).filter(k => Object.keys(db.items[k]).length)
+    .map(k => ({ k, name: (db.vendors.find(v => v.name.toLowerCase() === k) || {}).name || k }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+function openItems(keep) {
+  const sel = $('itemsVendor'), vs = itemVendors();
+  const want = keep || sel.value || ($('vendor').value || '').toLowerCase();
+  sel.innerHTML = vs.map(v => `<option value="${escapeHtml(v.k)}">${escapeHtml(v.name)}</option>`).join('');
+  if (vs.some(v => v.k === want)) sel.value = want;
+  fillItems();
+  if (!$('itemsDlg').open) { $('menuDlg').close(); $('itemsDlg').showModal(); }
+}
+function fillItems() {
+  const list = $('ilist'), k = $('itemsVendor').value, m = db.items[k] || {};
+  const names = Object.keys(m).sort((a, b) => a.localeCompare(b));
+  $('itemsOnce').hidden = !names.some(x => m[x] <= 1);
+  list.innerHTML = names.length ? '' : '<p class="empty">No item suggestions yet.</p>';
+  for (const x of names) {
+    const row = document.createElement('div');
+    row.className = 'line';
+    row.innerHTML = `<span class="what">${escapeHtml(x)}</span><span class="uses">${m[x]}&times;</span>`;
+    const rb = document.createElement('button');
+    rb.className = 'btn link'; rb.textContent = 'Rename';
+    rb.onclick = () => renameItem(k, x);
+    const xb = document.createElement('button');
+    xb.className = 'btn link'; xb.innerHTML = '&#10005;'; xb.setAttribute('aria-label', 'Remove ' + x);
+    xb.onclick = () => { delete m[x]; save(); fillItems(); fillItemList(); toast(`${x} removed`); };
+    row.append(rb, xb);
+    list.appendChild(row);
+  }
+}
+function renameItem(k, old) {
+  const m = db.items[k];
+  let to = prompt(`Rename "${old}" to:`, old);
+  if (to === null) return;
+  to = to.trim().replace(/\s+/g, ' ');
+  if (!to || to === old) return;
+  // Already there in any case (another item, or this one re-cased): the two become one
+  const same = Object.keys(m).find(x => x !== old && x.toLowerCase() === to.toLowerCase());
+  const uses = m[old];
+  delete m[old];
+  if (same) { m[same] += uses; toast(`${old} joined to ${same}`); }
+  else { m[to] = uses; toast(`Renamed to ${to}`); }
+  save(); fillItems(); fillItemList();
 }
 
 function showVendorPct() {
@@ -1383,6 +1448,17 @@ $('mResend').onclick = () => {
   for (const p of db.payments) rows.push(...paymentRows(p));
   shareFile(rows, fileName('everything'), 'Everything on the phone',
     { sales: db.sales.map(s => s.uid), payments: db.payments.map(p => p.uid) });
+};
+$('mItems').onclick = () => openItems();
+$('itemsVendor').onchange = fillItems;
+$('itemsClose').onclick = () => $('itemsDlg').close();
+$('itemsOnce').onclick = () => {
+  const m = db.items[$('itemsVendor').value] || {};
+  const once = Object.keys(m).filter(x => m[x] <= 1);
+  if (!once.length || !confirm(`Remove ${once.length} item${once.length > 1 ? 's' : ''} used only once for this vendor? ` +
+    'They come back as suggestions if typed again.')) return;
+  for (const x of once) delete m[x];
+  save(); fillItems(); fillItemList();
 };
 $('mBusiness').onclick = () => {
   const b = prompt('Business name (shown at the top and in the file name):', db.settings.business || '');
